@@ -1,0 +1,31 @@
+# docker-compose.yml  (located in F:\PROJECTS\security-manager\deploy)
+
+services:
+  # 1) NATS + JetStream
+  nats:
+    image: nats:2.10-alpine
+    command: ["-js", "-m", "8222"]
+    ports:
+      - "4222:4222"   # client connections
+      - "8222:8222"   # monitoring UI → http://localhost:8222
+
+  # 2) ClickHouse database
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.4
+    ports:
+      - "9000:9000"   # native TCP (Go driver)
+      - "8123:8123"   # HTTP UI → http://localhost:8123
+
+  # 3) Ingest service (your Go binary)
+  ingest:
+    build:
+      context: ..                 # repo root (one level up)
+      dockerfile: deploy/Dockerfile.ingest
+    environment:
+      - NATS_URL=nats://nats:4222
+      - CLICKHOUSE_ADDR=clickhouse:9000
+    depends_on:
+      - nats
+      - clickhouse
+    ports:
+      - "9002:9002"   # gRPC port for local tests

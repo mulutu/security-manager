@@ -1,0 +1,10 @@
+# --- build stage ---
+FROM golang:1.24 AS build
+WORKDIR /app
+COPY . .
+RUN cd cmd/ingest && CGO_ENABLED=0 go build -o /ingest
+
+# --- tiny runtime image ---
+FROM gcr.io/distroless/static
+COPY --from=build /ingest /ingest
+ENTRYPOINT ["/ingest"]

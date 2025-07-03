@@ -1,0 +1,18 @@
+syntax = "proto3";
+package proto;
+
+option go_package = "github.com/mulutu/security-manager/internal/proto;proto";
+
+message LogEvent {
+  string org_id     = 1;
+  string host_id    = 2;
+  int64  ts_unix_ns = 3;
+  string stream     = 4;      // "syslog" | "auth" | ...
+  string message    = 5;
+  map<string,string> labels = 6;
+}
+
+message Ack {}
+service AgentIngest {
+  rpc StreamEvents (stream LogEvent) returns (Ack);
+}
