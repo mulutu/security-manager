@@ -39,6 +39,9 @@ try {
     Set-Location $tempDir
     
     git clone https://github.com/mulutu/security-manager.git
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to clone repository"
+    }
     Set-Location "security-manager"
     
     $env:GOOS = "windows"
@@ -46,9 +49,17 @@ try {
     $env:CGO_ENABLED = "0"
     $env:GO111MODULE = "on"
     
+    Write-Host "   Downloading dependencies..." -ForegroundColor Gray
     go mod download
-    go mod tidy
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to download Go dependencies"
+    }
+    
+    Write-Host "   Building agent..." -ForegroundColor Gray
     go build -v -o "sm-agent.exe" ./cmd/agent
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to build agent"
+    }
     
     # Install
     $installDir = "C:\Program Files\Security Manager"
@@ -70,27 +81,75 @@ try {
         & sc.exe delete $serviceName 2>$null
     }
     
-    # Create new service
+    # Create new service with better error handling
+    Write-Host "🔧 Creating Windows service..." -ForegroundColor Blue
     $servicePath = "`"$installDir\sm-agent.exe`" -org $OrgId -token $Token -ingest $IngestUrl"
-    $result = & sc.exe create $serviceName binPath= $servicePath start= auto DisplayName= "Security Manager Agent" Description= "Security Manager monitoring and protection agent" 2>&1
     
-    if ($LASTEXITCODE -eq 0) {
-        Write-Host "✅ Service created successfully" -ForegroundColor Green
-        
-        # Start the service
-        Write-Host "🚀 Starting service..." -ForegroundColor Blue
+    # Try multiple service creation methods
+    $serviceCreated = $false
+    
+    # Method 1: sc.exe
+    try {
+        $result = & sc.exe create $serviceName binPath= $servicePath start= auto DisplayName= "Security Manager Agent" Description= "Security Manager monitoring and protection agent" 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            $serviceCreated = $true
+            Write-Host "✅ Service created using sc.exe" -ForegroundColor Green
+        } else {
+            Write-Host "   sc.exe failed: $result" -ForegroundColor Gray
+        }
+    } catch {
+        Write-Host "   sc.exe exception: $($_.Exception.Message)" -ForegroundColor Gray
+    }
+    
+    # Method 2: PowerShell New-Service
+    if (-not $serviceCreated) {
+        try {
+            New-Service -Name $serviceName -BinaryPathName "$installDir\sm-agent.exe -org $OrgId -token $Token -ingest $IngestUrl" -DisplayName "Security Manager Agent" -Description "Security Manager monitoring and protection agent" -StartupType Automatic -ErrorAction Stop
+            $serviceCreated = $true
+            Write-Host "✅ Service created using PowerShell" -ForegroundColor Green
+        } catch {
+            Write-Host "   PowerShell method failed: $($_.Exception.Message)" -ForegroundColor Gray
+        }
+    }
+    
+    if (-not $serviceCreated) {
+        throw "Failed to create Windows service using all methods"
+    }
+    
+    # Verify service exists
+    $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+    if (-not $service) {
+        throw "Service was not created properly"
+    }
+    
+    Write-Host "✅ Service verified and exists" -ForegroundColor Green
+    
+    # Start the service with timeout
+    Write-Host "🚀 Starting service..." -ForegroundColor Blue
+    try {
         Start-Service -Name $serviceName -ErrorAction Stop
-        Start-Sleep 3
+        Start-Sleep 5
         
         $service = Get-Service -Name $serviceName
         if ($service.Status -eq "Running") {
             Write-Host "✅ Service is running" -ForegroundColor Green
         } else {
-            Write-Host "⚠️  Service created but not running" -ForegroundColor Yellow
+            Write-Host "⚠️  Service created but not running. Status: $($service.Status)" -ForegroundColor Yellow
+            
+            # Check service logs
+            try {
+                $logs = Get-EventLog -LogName Application -Source $serviceName -Newest 3 -ErrorAction SilentlyContinue
+                if ($logs) {
+                    Write-Host "   Recent service logs:" -ForegroundColor Gray
+                    $logs | ForEach-Object { Write-Host "   $($_.TimeGenerated): $($_.Message)" -ForegroundColor Gray }
+                }
+            } catch {
+                Write-Host "   No service logs found" -ForegroundColor Gray
+            }
         }
-    } else {
-        Write-Host "❌ Service creation failed: $result" -ForegroundColor Red
-        throw "Service creation failed"
+    } catch {
+        Write-Host "❌ Failed to start service: $($_.Exception.Message)" -ForegroundColor Red
+        throw "Service start failed"
     }
     
     Write-Host ""
