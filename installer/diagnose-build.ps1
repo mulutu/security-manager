@@ -100,7 +100,7 @@ try {
     if ($LASTEXITCODE -eq 0) {
         Write-Host "  ✅ Repository cloned successfully" -ForegroundColor Green
         
-        Set-Location "security-manager/cmd/agent"
+        Set-Location "security-manager"
         
         # Check if go.mod exists
         if (Test-Path "go.mod") {
@@ -119,7 +119,7 @@ try {
                 $env:CGO_ENABLED = "0"
                 $env:GO111MODULE = "on"
                 
-                $buildOutput = go build -v -o "sm-agent.exe" . 2>&1
+                $buildOutput = go build -v -o "sm-agent.exe" ./cmd/agent 2>&1
                 if ($LASTEXITCODE -eq 0) {
                     Write-Host "  ✅ Build successful!" -ForegroundColor Green
                     

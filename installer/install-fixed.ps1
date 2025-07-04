@@ -143,8 +143,6 @@ try {
     
     Write-Host "🏗️  Building agent..." -ForegroundColor Blue
     try {
-        Set-Location "cmd/agent"
-        
         # Set build environment variables
         $env:GOOS = "windows"
         $env:GOARCH = "amd64"
@@ -156,7 +154,7 @@ try {
         go mod tidy
         
         Write-Host "   Building agent executable..." -ForegroundColor Gray
-        $buildOutput = go build -v -o "sm-agent.exe" . 2>&1
+        $buildOutput = go build -v -o "sm-agent.exe" ./cmd/agent 2>&1
         
         if ($LASTEXITCODE -ne 0) {
             Write-Host "   Build output: $buildOutput" -ForegroundColor Red
