@@ -202,7 +202,7 @@ SM_LOG_LEVEL=debug
     }
 
     # Create new service using multiple methods
-    $servicePath = "`"$installDir\sm-agent.exe`" -org $OrgId -token $Token -ingest $IngestUrl -log-level debug"
+    $servicePath = "`"$installDir\sm-agent.exe`" -org $OrgId -token $Token -ingest $IngestUrl"
     $serviceCreated = $false
     
     # Method 1: Try sc.exe
@@ -219,7 +219,7 @@ SM_LOG_LEVEL=debug
     # Method 2: Try PowerShell New-Service
     if (-not $serviceCreated) {
         try {
-            New-Service -Name $serviceName -BinaryPathName "$installDir\sm-agent.exe -org $OrgId -token $Token -ingest $IngestUrl -log-level debug" -DisplayName "Security Manager Agent" -Description "Security Manager monitoring and protection agent" -StartupType Automatic -ErrorAction Stop
+            New-Service -Name $serviceName -BinaryPathName "$installDir\sm-agent.exe -org $OrgId -token $Token -ingest $IngestUrl" -DisplayName "Security Manager Agent" -Description "Security Manager monitoring and protection agent" -StartupType Automatic -ErrorAction Stop
             $serviceCreated = $true
             Write-Host "✅ Service created using PowerShell" -ForegroundColor Green
         } catch {
@@ -253,15 +253,49 @@ SM_LOG_LEVEL=debug
 
     # Step 8: Start the service
     Write-Host "🚀 Starting service..." -ForegroundColor Blue
-    Start-Service -Name $serviceName -ErrorAction Stop
-    Start-Sleep 5
-    
-    $service = Get-Service -Name $serviceName
-    if ($service.Status -eq "Running") {
-        Write-Host "✅ Service is running" -ForegroundColor Green
-    } else {
-        Write-Host "⚠️  Service created but not running. Check logs for details." -ForegroundColor Yellow
-        throw "Service failed to start"
+    try {
+        Start-Service -Name $serviceName -ErrorAction Stop
+        Start-Sleep 5
+        
+        $service = Get-Service -Name $serviceName
+        if ($service.Status -eq "Running") {
+            Write-Host "✅ Service is running" -ForegroundColor Green
+        } else {
+            Write-Host "⚠️  Service created but not running. Checking logs..." -ForegroundColor Yellow
+            
+            # Check service logs
+            try {
+                $logs = Get-EventLog -LogName Application -Source $serviceName -Newest 5 -ErrorAction SilentlyContinue
+                if ($logs) {
+                    Write-Host "   Recent service logs:" -ForegroundColor Gray
+                    $logs | ForEach-Object { Write-Host "   $($_.TimeGenerated): $($_.Message)" -ForegroundColor Gray }
+                }
+            } catch {
+                Write-Host "   No service logs found" -ForegroundColor Gray
+            }
+            
+            # Try to start manually to see error
+            Write-Host "   Trying manual start to see error..." -ForegroundColor Gray
+            $process = Start-Process -FilePath "$installDir\sm-agent.exe" -ArgumentList "-org", $OrgId, "-token", $Token, "-ingest", $IngestUrl -PassThru -WindowStyle Hidden -RedirectStandardOutput "$tempDir\manual-output.txt" -RedirectStandardError "$tempDir\manual-error.txt"
+            Start-Sleep 3
+            
+            if (Test-Path "$tempDir\manual-error.txt") {
+                $errorMsg = Get-Content "$tempDir\manual-error.txt" -Raw
+                Write-Host "   Manual start error: $errorMsg" -ForegroundColor Red
+            }
+            
+            Remove-Item "$tempDir\manual-output.txt" -ErrorAction SilentlyContinue
+            Remove-Item "$tempDir\manual-error.txt" -ErrorAction SilentlyContinue
+            
+            if ($process -and -not $process.HasExited) {
+                Stop-Process -Id $process.Id -Force
+            }
+            
+            Write-Host "⚠️  Service created but failed to start. Check the error above." -ForegroundColor Yellow
+        }
+    } catch {
+        Write-Host "❌ Failed to start service: $($_.Exception.Message)" -ForegroundColor Red
+        throw "Service start failed"
     }
 
     # Step 9: Verify installation
