@@ -72,17 +72,42 @@ try {
     
     # Create new service
     $servicePath = "`"$installDir\sm-agent.exe`" -org $OrgId -token $Token -ingest $IngestUrl"
-    & sc.exe create $serviceName binPath= $servicePath start= demand DisplayName= "Security Manager Agent" Description= "Security Manager monitoring and protection agent"
+    $result = & sc.exe create $serviceName binPath= $servicePath start= auto DisplayName= "Security Manager Agent" Description= "Security Manager monitoring and protection agent" 2>&1
     
-    Write-Host "✅ Service created successfully" -ForegroundColor Green
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "✅ Service created successfully" -ForegroundColor Green
+        
+        # Start the service
+        Write-Host "🚀 Starting service..." -ForegroundColor Blue
+        Start-Service -Name $serviceName -ErrorAction Stop
+        Start-Sleep 3
+        
+        $service = Get-Service -Name $serviceName
+        if ($service.Status -eq "Running") {
+            Write-Host "✅ Service is running" -ForegroundColor Green
+        } else {
+            Write-Host "⚠️  Service created but not running" -ForegroundColor Yellow
+        }
+    } else {
+        Write-Host "❌ Service creation failed: $result" -ForegroundColor Red
+        throw "Service creation failed"
+    }
+    
     Write-Host ""
-    Write-Host "🎉 Installation completed!" -ForegroundColor Green
+    Write-Host "🎉 Installation completed successfully!" -ForegroundColor Green
     Write-Host ""
-    Write-Host "🔧 Next Steps:" -ForegroundColor Blue
-    Write-Host "  1. Test connection: Test-NetConnection -ComputerName 178.79.139.38 -Port 9002" -ForegroundColor White
-    Write-Host "  2. Test agent manually: cd '$installDir' && .\sm-agent.exe -org $OrgId -token $Token -ingest $IngestUrl" -ForegroundColor White
-    Write-Host "  3. Start service: Start-Service -Name $serviceName" -ForegroundColor White
-    Write-Host "  4. Check status: Get-Service -Name $serviceName" -ForegroundColor White
+    Write-Host "📊 Service Status:" -ForegroundColor Blue
+    Get-Service -Name $serviceName -ErrorAction SilentlyContinue | Format-Table -AutoSize
+    Write-Host ""
+    Write-Host "🔧 Management Commands:" -ForegroundColor Blue
+    Write-Host "  Start:   Start-Service -Name $serviceName"
+    Write-Host "  Stop:    Stop-Service -Name $serviceName"
+    Write-Host "  Status:  Get-Service -Name $serviceName"
+    Write-Host "  Logs:    Get-EventLog -LogName Application -Source '$serviceName' -Newest 10"
+    Write-Host ""
+    Write-Host "🌐 Web Interfaces:" -ForegroundColor Blue
+    Write-Host "  NATS Monitor: http://$($IngestUrl.Replace(':9002', ':8222'))"
+    Write-Host "  ClickHouse UI: http://$($IngestUrl.Replace(':9002', ':8123'))"
     Write-Host ""
     Write-Host "📞 Need help? Check: https://github.com/mulutu/security-manager/blob/main/DEPLOYMENT_MANUAL.md" -ForegroundColor Cyan
     
