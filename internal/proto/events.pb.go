@@ -105,6 +105,398 @@ func (x *LogEvent) GetLabels() map[string]string {
 	return nil
 }
 
+// Authentication for agent connections
+type AuthRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OrgId         string                 `protobuf:"bytes,1,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
+	Token         string                 `protobuf:"bytes,2,opt,name=token,proto3" json:"token,omitempty"`
+	AgentVersion  string                 `protobuf:"bytes,3,opt,name=agent_version,json=agentVersion,proto3" json:"agent_version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AuthRequest) Reset() {
+	*x = AuthRequest{}
+	mi := &file_internal_proto_events_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AuthRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AuthRequest) ProtoMessage() {}
+
+func (x *AuthRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_proto_events_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AuthRequest.ProtoReflect.Descriptor instead.
+func (*AuthRequest) Descriptor() ([]byte, []int) {
+	return file_internal_proto_events_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *AuthRequest) GetOrgId() string {
+	if x != nil {
+		return x.OrgId
+	}
+	return ""
+}
+
+func (x *AuthRequest) GetToken() string {
+	if x != nil {
+		return x.Token
+	}
+	return ""
+}
+
+func (x *AuthRequest) GetAgentVersion() string {
+	if x != nil {
+		return x.AgentVersion
+	}
+	return ""
+}
+
+type AuthResponse struct {
+	state                    protoimpl.MessageState `protogen:"open.v1"`
+	Authenticated            bool                   `protobuf:"varint,1,opt,name=authenticated,proto3" json:"authenticated,omitempty"`
+	ErrorMessage             string                 `protobuf:"bytes,2,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	HeartbeatIntervalSeconds int64                  `protobuf:"varint,3,opt,name=heartbeat_interval_seconds,json=heartbeatIntervalSeconds,proto3" json:"heartbeat_interval_seconds,omitempty"`
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
+}
+
+func (x *AuthResponse) Reset() {
+	*x = AuthResponse{}
+	mi := &file_internal_proto_events_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AuthResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AuthResponse) ProtoMessage() {}
+
+func (x *AuthResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_proto_events_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AuthResponse.ProtoReflect.Descriptor instead.
+func (*AuthResponse) Descriptor() ([]byte, []int) {
+	return file_internal_proto_events_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *AuthResponse) GetAuthenticated() bool {
+	if x != nil {
+		return x.Authenticated
+	}
+	return false
+}
+
+func (x *AuthResponse) GetErrorMessage() string {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return ""
+}
+
+func (x *AuthResponse) GetHeartbeatIntervalSeconds() int64 {
+	if x != nil {
+		return x.HeartbeatIntervalSeconds
+	}
+	return 0
+}
+
+// Mitigation commands from SaaS to agent
+type MitigateRequest struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	RequestId string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	OrgId     string                 `protobuf:"bytes,2,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
+	HostId    string                 `protobuf:"bytes,3,opt,name=host_id,json=hostId,proto3" json:"host_id,omitempty"`
+	// Types that are valid to be assigned to Action:
+	//
+	//	*MitigateRequest_BlockIp
+	//	*MitigateRequest_KillProcess
+	Action        isMitigateRequest_Action `protobuf_oneof:"action"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MitigateRequest) Reset() {
+	*x = MitigateRequest{}
+	mi := &file_internal_proto_events_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MitigateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MitigateRequest) ProtoMessage() {}
+
+func (x *MitigateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_proto_events_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MitigateRequest.ProtoReflect.Descriptor instead.
+func (*MitigateRequest) Descriptor() ([]byte, []int) {
+	return file_internal_proto_events_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *MitigateRequest) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *MitigateRequest) GetOrgId() string {
+	if x != nil {
+		return x.OrgId
+	}
+	return ""
+}
+
+func (x *MitigateRequest) GetHostId() string {
+	if x != nil {
+		return x.HostId
+	}
+	return ""
+}
+
+func (x *MitigateRequest) GetAction() isMitigateRequest_Action {
+	if x != nil {
+		return x.Action
+	}
+	return nil
+}
+
+func (x *MitigateRequest) GetBlockIp() *BlockIPAction {
+	if x != nil {
+		if x, ok := x.Action.(*MitigateRequest_BlockIp); ok {
+			return x.BlockIp
+		}
+	}
+	return nil
+}
+
+func (x *MitigateRequest) GetKillProcess() *KillProcessAction {
+	if x != nil {
+		if x, ok := x.Action.(*MitigateRequest_KillProcess); ok {
+			return x.KillProcess
+		}
+	}
+	return nil
+}
+
+type isMitigateRequest_Action interface {
+	isMitigateRequest_Action()
+}
+
+type MitigateRequest_BlockIp struct {
+	BlockIp *BlockIPAction `protobuf:"bytes,4,opt,name=block_ip,json=blockIp,proto3,oneof"`
+}
+
+type MitigateRequest_KillProcess struct {
+	KillProcess *KillProcessAction `protobuf:"bytes,5,opt,name=kill_process,json=killProcess,proto3,oneof"`
+}
+
+func (*MitigateRequest_BlockIp) isMitigateRequest_Action() {}
+
+func (*MitigateRequest_KillProcess) isMitigateRequest_Action() {}
+
+type BlockIPAction struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	IpAddress       string                 `protobuf:"bytes,1,opt,name=ip_address,json=ipAddress,proto3" json:"ip_address,omitempty"`
+	DurationMinutes int32                  `protobuf:"varint,2,opt,name=duration_minutes,json=durationMinutes,proto3" json:"duration_minutes,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *BlockIPAction) Reset() {
+	*x = BlockIPAction{}
+	mi := &file_internal_proto_events_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BlockIPAction) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BlockIPAction) ProtoMessage() {}
+
+func (x *BlockIPAction) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_proto_events_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BlockIPAction.ProtoReflect.Descriptor instead.
+func (*BlockIPAction) Descriptor() ([]byte, []int) {
+	return file_internal_proto_events_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *BlockIPAction) GetIpAddress() string {
+	if x != nil {
+		return x.IpAddress
+	}
+	return ""
+}
+
+func (x *BlockIPAction) GetDurationMinutes() int32 {
+	if x != nil {
+		return x.DurationMinutes
+	}
+	return 0
+}
+
+type KillProcessAction struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Pid           int32                  `protobuf:"varint,1,opt,name=pid,proto3" json:"pid,omitempty"`
+	ProcessName   string                 `protobuf:"bytes,2,opt,name=process_name,json=processName,proto3" json:"process_name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *KillProcessAction) Reset() {
+	*x = KillProcessAction{}
+	mi := &file_internal_proto_events_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *KillProcessAction) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*KillProcessAction) ProtoMessage() {}
+
+func (x *KillProcessAction) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_proto_events_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use KillProcessAction.ProtoReflect.Descriptor instead.
+func (*KillProcessAction) Descriptor() ([]byte, []int) {
+	return file_internal_proto_events_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *KillProcessAction) GetPid() int32 {
+	if x != nil {
+		return x.Pid
+	}
+	return 0
+}
+
+func (x *KillProcessAction) GetProcessName() string {
+	if x != nil {
+		return x.ProcessName
+	}
+	return ""
+}
+
+type MitigateResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RequestId     string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	Success       bool                   `protobuf:"varint,2,opt,name=success,proto3" json:"success,omitempty"`
+	ErrorMessage  string                 `protobuf:"bytes,3,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MitigateResponse) Reset() {
+	*x = MitigateResponse{}
+	mi := &file_internal_proto_events_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MitigateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MitigateResponse) ProtoMessage() {}
+
+func (x *MitigateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_proto_events_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MitigateResponse.ProtoReflect.Descriptor instead.
+func (*MitigateResponse) Descriptor() ([]byte, []int) {
+	return file_internal_proto_events_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *MitigateResponse) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *MitigateResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *MitigateResponse) GetErrorMessage() string {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return ""
+}
+
 type Ack struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -113,7 +505,7 @@ type Ack struct {
 
 func (x *Ack) Reset() {
 	*x = Ack{}
-	mi := &file_internal_proto_events_proto_msgTypes[1]
+	mi := &file_internal_proto_events_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -125,7 +517,7 @@ func (x *Ack) String() string {
 func (*Ack) ProtoMessage() {}
 
 func (x *Ack) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_proto_events_proto_msgTypes[1]
+	mi := &file_internal_proto_events_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -138,7 +530,7 @@ func (x *Ack) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Ack.ProtoReflect.Descriptor instead.
 func (*Ack) Descriptor() ([]byte, []int) {
-	return file_internal_proto_events_proto_rawDescGZIP(), []int{1}
+	return file_internal_proto_events_proto_rawDescGZIP(), []int{7}
 }
 
 var File_internal_proto_events_proto protoreflect.FileDescriptor
@@ -156,11 +548,41 @@ const file_internal_proto_events_proto_rawDesc = "" +
 	"\x06labels\x18\x06 \x03(\v2\x1b.proto.LogEvent.LabelsEntryR\x06labels\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x05\n" +
-	"\x03Ack2<\n" +
-	"\vAgentIngest\x12-\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"_\n" +
+	"\vAuthRequest\x12\x15\n" +
+	"\x06org_id\x18\x01 \x01(\tR\x05orgId\x12\x14\n" +
+	"\x05token\x18\x02 \x01(\tR\x05token\x12#\n" +
+	"\ragent_version\x18\x03 \x01(\tR\fagentVersion\"\x97\x01\n" +
+	"\fAuthResponse\x12$\n" +
+	"\rauthenticated\x18\x01 \x01(\bR\rauthenticated\x12#\n" +
+	"\rerror_message\x18\x02 \x01(\tR\ferrorMessage\x12<\n" +
+	"\x1aheartbeat_interval_seconds\x18\x03 \x01(\x03R\x18heartbeatIntervalSeconds\"\xdc\x01\n" +
+	"\x0fMitigateRequest\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\x12\x15\n" +
+	"\x06org_id\x18\x02 \x01(\tR\x05orgId\x12\x17\n" +
+	"\ahost_id\x18\x03 \x01(\tR\x06hostId\x121\n" +
+	"\bblock_ip\x18\x04 \x01(\v2\x14.proto.BlockIPActionH\x00R\ablockIp\x12=\n" +
+	"\fkill_process\x18\x05 \x01(\v2\x18.proto.KillProcessActionH\x00R\vkillProcessB\b\n" +
+	"\x06action\"Y\n" +
+	"\rBlockIPAction\x12\x1d\n" +
+	"\n" +
+	"ip_address\x18\x01 \x01(\tR\tipAddress\x12)\n" +
+	"\x10duration_minutes\x18\x02 \x01(\x05R\x0fdurationMinutes\"H\n" +
+	"\x11KillProcessAction\x12\x10\n" +
+	"\x03pid\x18\x01 \x01(\x05R\x03pid\x12!\n" +
+	"\fprocess_name\x18\x02 \x01(\tR\vprocessName\"p\n" +
+	"\x10MitigateResponse\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\x12\x18\n" +
+	"\asuccess\x18\x02 \x01(\bR\asuccess\x12#\n" +
+	"\rerror_message\x18\x03 \x01(\tR\ferrorMessage\"\x05\n" +
+	"\x03Ack2\xbd\x01\n" +
+	"\vAgentIngest\x127\n" +
+	"\fAuthenticate\x12\x12.proto.AuthRequest\x1a\x13.proto.AuthResponse\x12-\n" +
 	"\fStreamEvents\x12\x0f.proto.LogEvent\x1a\n" +
-	".proto.Ack(\x01B9Z7github.com/mulutu/security-manager/internal/proto;protob\x06proto3"
+	".proto.Ack(\x01\x12F\n" +
+	"\x0fReceiveCommands\x12\x17.proto.MitigateResponse\x1a\x16.proto.MitigateRequest(\x010\x01B9Z7github.com/mulutu/security-manager/internal/proto;protob\x06proto3"
 
 var (
 	file_internal_proto_events_proto_rawDescOnce sync.Once
@@ -174,21 +596,33 @@ func file_internal_proto_events_proto_rawDescGZIP() []byte {
 	return file_internal_proto_events_proto_rawDescData
 }
 
-var file_internal_proto_events_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_internal_proto_events_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_internal_proto_events_proto_goTypes = []any{
-	(*LogEvent)(nil), // 0: proto.LogEvent
-	(*Ack)(nil),      // 1: proto.Ack
-	nil,              // 2: proto.LogEvent.LabelsEntry
+	(*LogEvent)(nil),          // 0: proto.LogEvent
+	(*AuthRequest)(nil),       // 1: proto.AuthRequest
+	(*AuthResponse)(nil),      // 2: proto.AuthResponse
+	(*MitigateRequest)(nil),   // 3: proto.MitigateRequest
+	(*BlockIPAction)(nil),     // 4: proto.BlockIPAction
+	(*KillProcessAction)(nil), // 5: proto.KillProcessAction
+	(*MitigateResponse)(nil),  // 6: proto.MitigateResponse
+	(*Ack)(nil),               // 7: proto.Ack
+	nil,                       // 8: proto.LogEvent.LabelsEntry
 }
 var file_internal_proto_events_proto_depIdxs = []int32{
-	2, // 0: proto.LogEvent.labels:type_name -> proto.LogEvent.LabelsEntry
-	0, // 1: proto.AgentIngest.StreamEvents:input_type -> proto.LogEvent
-	1, // 2: proto.AgentIngest.StreamEvents:output_type -> proto.Ack
-	2, // [2:3] is the sub-list for method output_type
-	1, // [1:2] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	8, // 0: proto.LogEvent.labels:type_name -> proto.LogEvent.LabelsEntry
+	4, // 1: proto.MitigateRequest.block_ip:type_name -> proto.BlockIPAction
+	5, // 2: proto.MitigateRequest.kill_process:type_name -> proto.KillProcessAction
+	1, // 3: proto.AgentIngest.Authenticate:input_type -> proto.AuthRequest
+	0, // 4: proto.AgentIngest.StreamEvents:input_type -> proto.LogEvent
+	6, // 5: proto.AgentIngest.ReceiveCommands:input_type -> proto.MitigateResponse
+	2, // 6: proto.AgentIngest.Authenticate:output_type -> proto.AuthResponse
+	7, // 7: proto.AgentIngest.StreamEvents:output_type -> proto.Ack
+	3, // 8: proto.AgentIngest.ReceiveCommands:output_type -> proto.MitigateRequest
+	6, // [6:9] is the sub-list for method output_type
+	3, // [3:6] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_internal_proto_events_proto_init() }
@@ -196,13 +630,17 @@ func file_internal_proto_events_proto_init() {
 	if File_internal_proto_events_proto != nil {
 		return
 	}
+	file_internal_proto_events_proto_msgTypes[3].OneofWrappers = []any{
+		(*MitigateRequest_BlockIp)(nil),
+		(*MitigateRequest_KillProcess)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internal_proto_events_proto_rawDesc), len(file_internal_proto_events_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

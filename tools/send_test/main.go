@@ -10,7 +10,7 @@ import (
 
 func main() {
 	// gRPC endpoint from Docker Compose
-	conn, err := grpc.Dial("localhost:9002", grpc.WithInsecure())
+	conn, err := grpc.Dial("178.79.139.38:9002", grpc.WithInsecure())
 	if err != nil {
 		panic(err)
 	}

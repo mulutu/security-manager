@@ -1,0 +1,65 @@
+# Production Docker Compose for Remote VM (178.79.139.38)
+# This configuration exposes services for external agent connections
+
+services:
+  # 1) NATS + JetStream
+  nats:
+    image: nats:2.10-alpine
+    command: ["-js", "-m", "8222"]
+    ports:
+      - "4222:4222"   # client connections
+      - "8222:8222"   # monitoring UI → http://178.79.139.38:8222
+    volumes:
+      - nats_data:/data
+    restart: unless-stopped
+
+  # 2) ClickHouse database  
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.4
+    ports:
+      - "9000:9000"   # native TCP (Go driver)
+      - "8123:8123"   # HTTP UI → http://178.79.139.38:8123
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    restart: unless-stopped
+    environment:
+      - CLICKHOUSE_DB=security_manager
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASSWORD=
+
+  # 3) Ingest service (production configuration)
+  ingest:
+    build:
+      context: ..                 # repo root (one level up)
+      dockerfile: deploy/Dockerfile.ingest
+    environment:
+      - NATS_URL=nats://nats:4222
+      - CLICKHOUSE_ADDR=clickhouse:9000
+      - TLS_ENABLED=false         # TODO: Enable TLS with proper certs
+      - GRPC_PORT=9002
+      - LOG_LEVEL=info
+    depends_on:
+      - nats
+      - clickhouse
+    ports:
+      - "9002:9002"   # gRPC port for agent connections
+    restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs
+
+  # 4) Nginx reverse proxy (optional, for TLS termination)
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - ingest
+    restart: unless-stopped
+
+volumes:
+  nats_data:
+  clickhouse_data: 

@@ -24,8 +24,38 @@ services:
     environment:
       - NATS_URL=nats://nats:4222
       - CLICKHOUSE_ADDR=clickhouse:9000
+      - TLS_ENABLED=false         # Set to true for production
+      # - TLS_CERT_FILE=/certs/server.crt
+      # - TLS_KEY_FILE=/certs/server.key
     depends_on:
       - nats
       - clickhouse
     ports:
       - "9002:9002"   # gRPC port for local tests
+
+  # 4) Test agent for demonstration
+  test-agent:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.agent
+    environment:
+      - SM_ORG_ID=demo
+      - SM_TOKEN=sm_tok_demo123
+      - SM_HOST_ID=test-container
+      - SM_INGEST_URL=ingest:9002
+      - SM_USE_TLS=false
+      - SM_FILE_PATH=/var/log/test.log
+    depends_on:
+      - ingest
+    volumes:
+      - ./test-logs:/var/log
+    # Create a test log file
+    command: >
+      sh -c "
+        echo 'Starting test agent...' > /var/log/test.log &&
+        while true; do
+          echo 'Test log entry at' $(date) >> /var/log/test.log &&
+          sleep 10
+        done &
+        exec /agent
+      "

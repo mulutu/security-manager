@@ -12,7 +12,50 @@ message LogEvent {
   map<string,string> labels = 6;
 }
 
+// Authentication for agent connections
+message AuthRequest {
+  string org_id = 1;
+  string token = 2;
+  string agent_version = 3;
+}
+
+message AuthResponse {
+  bool authenticated = 1;
+  string error_message = 2;
+  int64 heartbeat_interval_seconds = 3;
+}
+
+// Mitigation commands from SaaS to agent
+message MitigateRequest {
+  string request_id = 1;
+  string org_id = 2;
+  string host_id = 3;
+  oneof action {
+    BlockIPAction block_ip = 4;
+    KillProcessAction kill_process = 5;
+  }
+}
+
+message BlockIPAction {
+  string ip_address = 1;
+  int32 duration_minutes = 2;
+}
+
+message KillProcessAction {
+  int32 pid = 1;
+  string process_name = 2;
+}
+
+message MitigateResponse {
+  string request_id = 1;
+  bool success = 2;
+  string error_message = 3;
+}
+
 message Ack {}
+
 service AgentIngest {
+  rpc Authenticate (AuthRequest) returns (AuthResponse);
   rpc StreamEvents (stream LogEvent) returns (Ack);
+  rpc ReceiveCommands (stream MitigateResponse) returns (stream MitigateRequest);
 }

@@ -19,14 +19,18 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AgentIngest_StreamEvents_FullMethodName = "/proto.AgentIngest/StreamEvents"
+	AgentIngest_Authenticate_FullMethodName    = "/proto.AgentIngest/Authenticate"
+	AgentIngest_StreamEvents_FullMethodName    = "/proto.AgentIngest/StreamEvents"
+	AgentIngest_ReceiveCommands_FullMethodName = "/proto.AgentIngest/ReceiveCommands"
 )
 
 // AgentIngestClient is the client API for AgentIngest service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type AgentIngestClient interface {
+	Authenticate(ctx context.Context, in *AuthRequest, opts ...grpc.CallOption) (*AuthResponse, error)
 	StreamEvents(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[LogEvent, Ack], error)
+	ReceiveCommands(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[MitigateResponse, MitigateRequest], error)
 }
 
 type agentIngestClient struct {
@@ -35,6 +39,16 @@ type agentIngestClient struct {
 
 func NewAgentIngestClient(cc grpc.ClientConnInterface) AgentIngestClient {
 	return &agentIngestClient{cc}
+}
+
+func (c *agentIngestClient) Authenticate(ctx context.Context, in *AuthRequest, opts ...grpc.CallOption) (*AuthResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AuthResponse)
+	err := c.cc.Invoke(ctx, AgentIngest_Authenticate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *agentIngestClient) StreamEvents(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[LogEvent, Ack], error) {
@@ -50,11 +64,26 @@ func (c *agentIngestClient) StreamEvents(ctx context.Context, opts ...grpc.CallO
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentIngest_StreamEventsClient = grpc.ClientStreamingClient[LogEvent, Ack]
 
+func (c *agentIngestClient) ReceiveCommands(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[MitigateResponse, MitigateRequest], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AgentIngest_ServiceDesc.Streams[1], AgentIngest_ReceiveCommands_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[MitigateResponse, MitigateRequest]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentIngest_ReceiveCommandsClient = grpc.BidiStreamingClient[MitigateResponse, MitigateRequest]
+
 // AgentIngestServer is the server API for AgentIngest service.
 // All implementations must embed UnimplementedAgentIngestServer
 // for forward compatibility.
 type AgentIngestServer interface {
+	Authenticate(context.Context, *AuthRequest) (*AuthResponse, error)
 	StreamEvents(grpc.ClientStreamingServer[LogEvent, Ack]) error
+	ReceiveCommands(grpc.BidiStreamingServer[MitigateResponse, MitigateRequest]) error
 	mustEmbedUnimplementedAgentIngestServer()
 }
 
@@ -65,8 +94,14 @@ type AgentIngestServer interface {
 // pointer dereference when methods are called.
 type UnimplementedAgentIngestServer struct{}
 
+func (UnimplementedAgentIngestServer) Authenticate(context.Context, *AuthRequest) (*AuthResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Authenticate not implemented")
+}
 func (UnimplementedAgentIngestServer) StreamEvents(grpc.ClientStreamingServer[LogEvent, Ack]) error {
 	return status.Errorf(codes.Unimplemented, "method StreamEvents not implemented")
+}
+func (UnimplementedAgentIngestServer) ReceiveCommands(grpc.BidiStreamingServer[MitigateResponse, MitigateRequest]) error {
+	return status.Errorf(codes.Unimplemented, "method ReceiveCommands not implemented")
 }
 func (UnimplementedAgentIngestServer) mustEmbedUnimplementedAgentIngestServer() {}
 func (UnimplementedAgentIngestServer) testEmbeddedByValue()                     {}
@@ -89,6 +124,24 @@ func RegisterAgentIngestServer(s grpc.ServiceRegistrar, srv AgentIngestServer) {
 	s.RegisterService(&AgentIngest_ServiceDesc, srv)
 }
 
+func _AgentIngest_Authenticate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AuthRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentIngestServer).Authenticate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentIngest_Authenticate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentIngestServer).Authenticate(ctx, req.(*AuthRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AgentIngest_StreamEvents_Handler(srv interface{}, stream grpc.ServerStream) error {
 	return srv.(AgentIngestServer).StreamEvents(&grpc.GenericServerStream[LogEvent, Ack]{ServerStream: stream})
 }
@@ -96,17 +149,35 @@ func _AgentIngest_StreamEvents_Handler(srv interface{}, stream grpc.ServerStream
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentIngest_StreamEventsServer = grpc.ClientStreamingServer[LogEvent, Ack]
 
+func _AgentIngest_ReceiveCommands_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(AgentIngestServer).ReceiveCommands(&grpc.GenericServerStream[MitigateResponse, MitigateRequest]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentIngest_ReceiveCommandsServer = grpc.BidiStreamingServer[MitigateResponse, MitigateRequest]
+
 // AgentIngest_ServiceDesc is the grpc.ServiceDesc for AgentIngest service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var AgentIngest_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "proto.AgentIngest",
 	HandlerType: (*AgentIngestServer)(nil),
-	Methods:     []grpc.MethodDesc{},
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Authenticate",
+			Handler:    _AgentIngest_Authenticate_Handler,
+		},
+	},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "StreamEvents",
 			Handler:       _AgentIngest_StreamEvents_Handler,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "ReceiveCommands",
+			Handler:       _AgentIngest_ReceiveCommands_Handler,
+			ServerStreams: true,
 			ClientStreams: true,
 		},
 	},

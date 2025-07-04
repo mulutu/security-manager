@@ -1,0 +1,10 @@
+# --- build stage ---
+FROM golang:1.24 AS build
+WORKDIR /app
+COPY . .
+RUN cd cmd/agent && CGO_ENABLED=0 go build -o /agent
+
+# --- tiny runtime image ---
+FROM gcr.io/distroless/static
+COPY --from=build /agent /agent
+ENTRYPOINT ["/agent"] 
