@@ -4,12 +4,12 @@ import (
 	"context"
 	"crypto/tls"
 	"flag"
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/kardianos/service"
 	pb "github.com/mulutu/security-manager/internal/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -23,23 +23,64 @@ var (
 	ingestURL = flag.String("ingest", getEnvOrDefault("SM_INGEST_URL", "localhost:9002"), "gRPC ingest host:port")
 	filePath  = flag.String("file", getEnvOrDefault("SM_FILE_PATH", ""), "file to tail")
 	useTLS    = flag.Bool("tls", getEnvOrDefault("SM_USE_TLS", "false") == "true", "use TLS for gRPC connection")
-	version   = "1.0.0"
+
+	// Service management flags
+	serviceFlag = flag.String("service", "", "Control the system service (install, uninstall, start, stop)")
+
+	version = "1.0.0"
+	logger  service.Logger
 )
 
-func main() {
-	flag.Parse()
+// Agent represents our service
+type Agent struct {
+	ctx    context.Context
+	cancel context.CancelFunc
+}
+
+// Start is called when the service starts
+func (a *Agent) Start(s service.Service) error {
+	if service.Interactive() {
+		logger.Info("Running in terminal.")
+	} else {
+		logger.Info("Running as service.")
+	}
+
+	a.ctx, a.cancel = context.WithCancel(context.Background())
+	go a.run()
+	return nil
+}
+
+// Stop is called when the service stops
+func (a *Agent) Stop(s service.Service) error {
+	logger.Info("Stopping Security Manager Agent...")
+	if a.cancel != nil {
+		a.cancel()
+	}
+	return nil
+}
+
+// run contains the main agent logic
+func (a *Agent) run() {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Errorf("Agent crashed: %v", r)
+		}
+	}()
 
 	if *orgID == "" {
-		log.Fatalln("missing -org flag or SM_ORG_ID environment variable")
+		logger.Error("missing -org flag or SM_ORG_ID environment variable")
+		return
 	}
 	if *token == "" {
-		log.Fatalln("missing -token flag or SM_TOKEN environment variable")
+		logger.Error("missing -token flag or SM_TOKEN environment variable")
+		return
 	}
 	if *hostID == "" {
 		if h, _ := os.Hostname(); h != "" {
 			*hostID = h
 		} else {
-			log.Fatalln("could not determine hostname, please specify -host")
+			logger.Error("could not determine hostname, please specify -host")
+			return
 		}
 	}
 
@@ -56,40 +97,97 @@ func main() {
 
 	conn, err := grpc.Dial(*ingestURL, opts...)
 	if err != nil {
-		log.Fatalf("dial: %v", err)
+		logger.Errorf("dial failed: %v", err)
+		return
 	}
 	defer conn.Close()
 
 	client := pb.NewAgentIngestClient(conn)
 
 	// Authenticate first
-	authResp, err := client.Authenticate(context.Background(), &pb.AuthRequest{
+	authResp, err := client.Authenticate(a.ctx, &pb.AuthRequest{
 		OrgId:        *orgID,
 		Token:        *token,
 		AgentVersion: version,
 	})
 	if err != nil {
-		log.Fatalf("authentication failed: %v", err)
+		logger.Errorf("authentication failed: %v", err)
+		return
 	}
 	if !authResp.Authenticated {
-		log.Fatalf("authentication rejected: %s", authResp.ErrorMessage)
+		logger.Errorf("authentication rejected: %s", authResp.ErrorMessage)
+		return
 	}
 
-	log.Printf("✅ Authenticated successfully as %s/%s", *orgID, *hostID)
+	logger.Infof("✅ Authenticated successfully as %s/%s", *orgID, *hostID)
 
 	// Start event streaming
-	stream, err := client.StreamEvents(context.Background())
+	stream, err := client.StreamEvents(a.ctx)
 	if err != nil {
-		log.Fatalf("stream: %v", err)
+		logger.Errorf("stream failed: %v", err)
+		return
 	}
 
-	// Ctrl-C → graceful shutdown
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
+	logger.Infof("⇢ streaming logs as %s/%s ➜ %s (TLS: %v) …", *orgID, *hostID, *ingestURL, *useTLS)
+	if err := runCollector(a.ctx, stream, *orgID, *hostID, *filePath, authResp.HeartbeatIntervalSeconds); err != nil {
+		logger.Errorf("collector error: %v", err)
+		return
+	}
+}
 
-	fmt.Printf("⇢ streaming logs as %s/%s ➜ %s (TLS: %v) …\n", *orgID, *hostID, *ingestURL, *useTLS)
-	if err := runCollector(ctx, stream, *orgID, *hostID, *filePath, authResp.HeartbeatIntervalSeconds); err != nil {
-		log.Fatalf("collector error: %v", err)
+func main() {
+	flag.Parse()
+
+	// Service configuration
+	svcConfig := &service.Config{
+		Name:        "SecurityManagerAgent",
+		DisplayName: "Security Manager Agent",
+		Description: "Security Manager monitoring and protection agent",
+		Arguments:   []string{"-org", *orgID, "-token", *token, "-ingest", *ingestURL},
+	}
+
+	// Create the agent
+	agent := &Agent{}
+
+	// Create the service
+	s, err := service.New(agent, svcConfig)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Setup logger
+	logger, err = s.Logger(nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Handle service control commands
+	if len(*serviceFlag) != 0 {
+		err := service.Control(s, *serviceFlag)
+		if err != nil {
+			log.Printf("Valid actions: %q\n", service.ControlAction)
+			log.Fatal(err)
+		}
+		return
+	}
+
+	// Run the service
+	if service.Interactive() {
+		// Running in terminal - handle Ctrl+C gracefully
+		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer cancel()
+
+		agent.ctx = ctx
+		go agent.run()
+
+		<-ctx.Done()
+		logger.Info("Shutting down...")
+	} else {
+		// Running as a service
+		err = s.Run()
+		if err != nil {
+			logger.Error(err)
+		}
 	}
 }
 

@@ -81,88 +81,61 @@ try {
         & sc.exe delete $serviceName 2>$null
     }
     
-    # Create new service with better error handling
-    Write-Host "🔧 Creating Windows service..." -ForegroundColor Blue
-    $servicePath = "`"$installDir\sm-agent.exe`" -org $OrgId -token $Token -ingest $IngestUrl"
+    # Install and start the native Windows service
+    Write-Host "🔧 Installing Windows service..." -ForegroundColor Blue
     
-    # Try multiple service creation methods
-    $serviceCreated = $false
-    
-    # Method 1: sc.exe
+    # Use the agent's built-in service installation
     try {
-        $result = & sc.exe create $serviceName binPath= $servicePath start= auto DisplayName= "Security Manager Agent" Description= "Security Manager monitoring and protection agent" 2>&1
+        $installResult = & "$installDir\sm-agent.exe" -service install -org $OrgId -token $Token -ingest $IngestUrl 2>&1
         if ($LASTEXITCODE -eq 0) {
-            $serviceCreated = $true
-            Write-Host "✅ Service created using sc.exe" -ForegroundColor Green
+            Write-Host "✅ Service installed successfully" -ForegroundColor Green
         } else {
-            Write-Host "   sc.exe failed: $result" -ForegroundColor Gray
+            Write-Host "   Service install output: $installResult" -ForegroundColor Gray
+            throw "Service installation failed with exit code $LASTEXITCODE"
         }
     } catch {
-        Write-Host "   sc.exe exception: $($_.Exception.Message)" -ForegroundColor Gray
+        Write-Host "❌ Failed to install service: $($_.Exception.Message)" -ForegroundColor Red
+        throw "Service installation failed"
     }
     
-    # Method 2: PowerShell New-Service
-    if (-not $serviceCreated) {
-        try {
-            New-Service -Name $serviceName -BinaryPathName "$installDir\sm-agent.exe -org $OrgId -token $Token -ingest $IngestUrl" -DisplayName "Security Manager Agent" -Description "Security Manager monitoring and protection agent" -StartupType Automatic -ErrorAction Stop
-            $serviceCreated = $true
-            Write-Host "✅ Service created using PowerShell" -ForegroundColor Green
-        } catch {
-            Write-Host "   PowerShell method failed: $($_.Exception.Message)" -ForegroundColor Gray
-        }
-    }
-    
-    if (-not $serviceCreated) {
-        throw "Failed to create Windows service using all methods"
-    }
-    
-    # Verify service exists
-    $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
-    if (-not $service) {
-        throw "Service was not created properly"
-    }
-    
-    Write-Host "✅ Service verified and exists" -ForegroundColor Green
-    
-    # Start the service with timeout
+    # Start the service
     Write-Host "🚀 Starting service..." -ForegroundColor Blue
     try {
-        Start-Service -Name $serviceName -ErrorAction Stop
-        Start-Sleep 5
-        
-        $service = Get-Service -Name $serviceName
-        if ($service.Status -eq "Running") {
-            Write-Host "✅ Service is running" -ForegroundColor Green
+        $startResult = & "$installDir\sm-agent.exe" -service start 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "✅ Service started successfully" -ForegroundColor Green
         } else {
-            Write-Host "⚠️  Service created but not running. Status: $($service.Status)" -ForegroundColor Yellow
-            
-            # Check service logs
-            try {
-                $logs = Get-EventLog -LogName Application -Source $serviceName -Newest 3 -ErrorAction SilentlyContinue
-                if ($logs) {
-                    Write-Host "   Recent service logs:" -ForegroundColor Gray
-                    $logs | ForEach-Object { Write-Host "   $($_.TimeGenerated): $($_.Message)" -ForegroundColor Gray }
-                }
-            } catch {
-                Write-Host "   No service logs found" -ForegroundColor Gray
-            }
+            Write-Host "   Service start output: $startResult" -ForegroundColor Gray
+            # Try manual start as fallback
+            Write-Host "   Trying manual start..." -ForegroundColor Gray
+            Start-Service -Name "SecurityManagerAgent" -ErrorAction Stop
+            Write-Host "✅ Service started manually" -ForegroundColor Green
         }
     } catch {
         Write-Host "❌ Failed to start service: $($_.Exception.Message)" -ForegroundColor Red
         throw "Service start failed"
     }
     
+    # Verify service is running
+    Start-Sleep 3
+    $service = Get-Service -Name "SecurityManagerAgent" -ErrorAction SilentlyContinue
+    if ($service -and $service.Status -eq "Running") {
+        Write-Host "✅ Service is running correctly" -ForegroundColor Green
+    } else {
+        Write-Host "⚠️  Service status: $($service.Status)" -ForegroundColor Yellow
+    }
+    
     Write-Host ""
     Write-Host "🎉 Installation completed successfully!" -ForegroundColor Green
     Write-Host ""
     Write-Host "📊 Service Status:" -ForegroundColor Blue
-    Get-Service -Name $serviceName -ErrorAction SilentlyContinue | Format-Table -AutoSize
+    Get-Service -Name "SecurityManagerAgent" -ErrorAction SilentlyContinue | Format-Table -AutoSize
     Write-Host ""
     Write-Host "🔧 Management Commands:" -ForegroundColor Blue
-    Write-Host "  Start:   Start-Service -Name $serviceName"
-    Write-Host "  Stop:    Stop-Service -Name $serviceName"
-    Write-Host "  Status:  Get-Service -Name $serviceName"
-    Write-Host "  Logs:    Get-EventLog -LogName Application -Source '$serviceName' -Newest 10"
+    Write-Host "  Start:   `"$installDir\sm-agent.exe`" -service start"
+    Write-Host "  Stop:    `"$installDir\sm-agent.exe`" -service stop"
+    Write-Host "  Status:  Get-Service -Name SecurityManagerAgent"
+    Write-Host "  Uninstall: `"$installDir\sm-agent.exe`" -service uninstall"
     Write-Host ""
     Write-Host "🌐 Web Interfaces:" -ForegroundColor Blue
     Write-Host "  NATS Monitor: http://$($IngestUrl.Replace(':9002', ':8222'))"

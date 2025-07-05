@@ -4,6 +4,7 @@ go 1.24.4
 
 require (
 	github.com/ClickHouse/clickhouse-go/v2 v2.37.2
+	github.com/kardianos/service v1.2.2
 	github.com/nats-io/nats.go v1.43.0
 	google.golang.org/grpc v1.73.0
 	google.golang.org/protobuf v1.36.6
