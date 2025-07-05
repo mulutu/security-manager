@@ -7,11 +7,11 @@
 package proto
 
 import (
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
-	unsafe "unsafe"
+
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -591,7 +591,7 @@ var (
 
 func file_internal_proto_events_proto_rawDescGZIP() []byte {
 	file_internal_proto_events_proto_rawDescOnce.Do(func() {
-		file_internal_proto_events_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_internal_proto_events_proto_rawDesc), len(file_internal_proto_events_proto_rawDesc)))
+		file_internal_proto_events_proto_rawDescData = protoimpl.X.CompressGZIP([]byte(file_internal_proto_events_proto_rawDesc))
 	})
 	return file_internal_proto_events_proto_rawDescData
 }
@@ -638,7 +638,7 @@ func file_internal_proto_events_proto_init() {
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internal_proto_events_proto_rawDesc), len(file_internal_proto_events_proto_rawDesc)),
+			RawDescriptor: []byte(file_internal_proto_events_proto_rawDesc),
 			NumEnums:      0,
 			NumMessages:   9,
 			NumExtensions: 0,
