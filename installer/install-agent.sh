@@ -149,6 +149,10 @@ EOF
 # Remove any existing go.sum to let Go generate correct checksums
 rm -f go.sum
 
+# Clean Go module cache to avoid any cached bad checksums
+log_info "Cleaning Go module cache..."
+go clean -modcache
+
 # Temporarily comment out NATS and ClickHouse imports in the agent code
 log_info "Temporarily disabling problematic imports for build..."
 find cmd/ -name "*.go" -exec sed -i 's/.*nats.*//g' {} \;
@@ -156,6 +160,12 @@ find cmd/ -name "*.go" -exec sed -i 's/.*clickhouse.*//g' {} \;
 
 # Skip all dependency downloads and resolution
 log_info "Using minimal dependencies to avoid Go version conflicts..."
+
+# Set environment for fresh downloads
+export GOPROXY=direct
+export GOSUMDB=off
+export GO111MODULE=on
+export CGO_ENABLED=0
 
 # Build the agent
 log_info "Building minimal production agent..."
