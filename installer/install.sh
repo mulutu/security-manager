@@ -4,7 +4,15 @@ set -e
 # Security Manager - Beautiful Production Agent Installer
 # Pre-compiled binaries only - no source compilation
 
-# Configuration - Read from environment variables or use defaults
+# Parse command line arguments for SM_TOKEN
+for arg in "$@"; do
+    if [[ $arg == SM_TOKEN=* ]]; then
+        SM_TOKEN="${arg#SM_TOKEN=}"
+        break
+    fi
+done
+
+# Configuration - Read from environment variables, command line args, or use defaults
 TOKEN=${SM_TOKEN:-"sm_tok_demo123"}
 HOST_ID=${SM_HOST_ID:-$(hostname)}
 INGEST_URL="178.79.139.38:9002"

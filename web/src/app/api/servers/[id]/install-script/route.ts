@@ -110,8 +110,8 @@ function generateInstallCommand(config: {
 # Set token and run installer
 # $env:SM_TOKEN="${apiKey}"; curl -fsSL "${baseUrl}/install.ps1" | powershell`
   } else {
-    // For Linux and macOS, simplified approach - just pass the token
-    // The token contains all the necessary information (org, server, etc.)
-    return `SM_TOKEN="${apiKey}" curl -fsSL ${baseUrl}/install.sh | sudo bash`
+    // For Linux and macOS, pass token as argument to bash
+    // This is cleaner and more reliable than environment variables
+    return `curl -fsSL ${baseUrl}/install.sh | sudo bash -s SM_TOKEN="${apiKey}"`
   }
 } 
