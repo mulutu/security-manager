@@ -186,26 +186,15 @@ cleanup_existing() {
     fi
 }
 
-# Detect platform
-detect_platform() {
-    log_step "Detecting system architecture..."
-    
+# Detect platform (silent version for variable assignment)
+get_platform() {
     local os=$(uname -s | tr '[:upper:]' '[:lower:]')
     local arch=$(uname -m)
     
     case $arch in
-        x86_64) 
-            arch="amd64"
-            log_info "Detected: Intel/AMD 64-bit (x86_64)"
-            ;;
-        aarch64|arm64) 
-            arch="arm64"
-            log_info "Detected: ARM 64-bit (aarch64)"
-            ;;
-        armv7l) 
-            arch="arm"
-            log_info "Detected: ARM 32-bit (armv7l)"
-            ;;
+        x86_64) arch="amd64" ;;
+        aarch64|arm64) arch="arm64" ;;
+        armv7l) arch="arm" ;;
         *) 
             log_error "Unsupported architecture: $arch"
             echo -e "${INFO}💡 Supported architectures: x86_64, aarch64/arm64, armv7l${RESET}\n"
@@ -219,13 +208,28 @@ detect_platform() {
         exit 1
     fi
     
-    log_success "Platform: ${BOLD}${SUCCESS}Linux ${arch}${RESET}"
     echo "${os}-${arch}"
+}
+
+# Detect and display platform info
+detect_platform() {
+    log_step "Detecting system architecture..."
+    
+    local platform=$(get_platform)
+    local arch=$(echo $platform | cut -d'-' -f2)
+    
+    case $arch in
+        amd64) log_info "Detected: Intel/AMD 64-bit (x86_64)" ;;
+        arm64) log_info "Detected: ARM 64-bit (aarch64)" ;;
+        arm) log_info "Detected: ARM 32-bit (armv7l)" ;;
+    esac
+    
+    log_success "Platform: ${BOLD}${SUCCESS}Linux ${arch}${RESET}"
 }
 
 # Download pre-compiled binary
 download_binary() {
-    local platform=$(detect_platform)
+    local platform=$(get_platform)
     local binary_name="sm-agent-${platform}"
     local download_url="${BINARY_BASE_URL}/${binary_name}"
     local checksum_url="${BINARY_BASE_URL}/${binary_name}.sha256"
@@ -364,6 +368,10 @@ verify_installation() {
 main() {
     # Clean up any existing installation first
     cleanup_existing
+    echo
+    
+    # Detect platform
+    detect_platform
     echo
     
     # Download pre-compiled binary
