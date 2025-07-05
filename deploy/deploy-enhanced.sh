@@ -30,9 +30,13 @@ error() {
 TYPE="services"
 PROJECT_DIR="/opt/security-manager"
 SERVICE_USER="security-manager"
+# External PostgreSQL server configuration
+POSTGRES_HOST="178.79.136.143"
+POSTGRES_PORT="5433"
 POSTGRES_DB="security_manager"
-POSTGRES_USER="security_manager"
-POSTGRES_PASSWORD=""
+POSTGRES_USER="security_manager_admin"
+POSTGRES_PASSWORD="M@gar1ta@2024!\$"
+DATABASE_URL="postgresql://security_manager_admin:M@gar1ta@2024!\$@178.79.136.143:5433/security_manager?schema=public"
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -81,45 +85,50 @@ log "🚀 Starting Security Manager v1.0.7 Enhanced Deployment"
 log "Type: $TYPE"
 log "Project Directory: $PROJECT_DIR"
 
-# Function to check if PostgreSQL is running
+# Function to check if external PostgreSQL is accessible
 check_postgres() {
-    log "🔍 Checking PostgreSQL status..."
-    if systemctl is-active --quiet postgresql; then
-        log "✅ PostgreSQL is running"
-        return 0
+    log "🔍 Checking external PostgreSQL connection..."
+    if command -v psql &> /dev/null; then
+        if PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT 1;" &> /dev/null; then
+            log "✅ External PostgreSQL is accessible"
+            return 0
+        else
+            warn "Cannot connect to external PostgreSQL server"
+            return 1
+        fi
     else
-        warn "PostgreSQL is not running"
-        return 1
+        log "📦 Installing PostgreSQL client..."
+        apt-get update
+        apt-get install -y postgresql-client
+        # Try again after installing client
+        if PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT 1;" &> /dev/null; then
+            log "✅ External PostgreSQL is accessible"
+            return 0
+        else
+            error "❌ Cannot connect to external PostgreSQL server at $POSTGRES_HOST:$POSTGRES_PORT"
+        fi
     fi
 }
 
-# Function to setup PostgreSQL database
+# Function to setup external PostgreSQL connection
 setup_postgres() {
-    log "🗄️  Setting up PostgreSQL database..."
+    log "🗄️  Setting up external PostgreSQL connection..."
     
-    if ! check_postgres; then
-        log "📦 Installing PostgreSQL..."
+    # Install PostgreSQL client if not present
+    if ! command -v psql &> /dev/null; then
+        log "📦 Installing PostgreSQL client..."
         apt-get update
-        apt-get install -y postgresql postgresql-contrib
-        systemctl start postgresql
-        systemctl enable postgresql
+        apt-get install -y postgresql-client
     fi
     
-    # Get PostgreSQL password if not provided
-    if [[ -z "$POSTGRES_PASSWORD" ]]; then
-        echo -n "Enter PostgreSQL password for user '$POSTGRES_USER': "
-        read -s POSTGRES_PASSWORD
-        echo
+    # Test connection to external PostgreSQL
+    log "🔍 Testing connection to external PostgreSQL server..."
+    if ! PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT version();" &> /dev/null; then
+        error "❌ Cannot connect to external PostgreSQL server at $POSTGRES_HOST:$POSTGRES_PORT"
     fi
     
-    # Create database and user
-    log "🔧 Creating database and user..."
-    sudo -u postgres psql -c "CREATE DATABASE $POSTGRES_DB;" 2>/dev/null || true
-    sudo -u postgres psql -c "CREATE USER $POSTGRES_USER WITH PASSWORD '$POSTGRES_PASSWORD';" 2>/dev/null || true
-    sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE $POSTGRES_DB TO $POSTGRES_USER;" 2>/dev/null || true
-    sudo -u postgres psql -c "ALTER USER $POSTGRES_USER CREATEDB;" 2>/dev/null || true
-    
-    log "✅ PostgreSQL setup complete"
+    log "✅ External PostgreSQL connection verified"
+    log "🔗 Database: $DATABASE_URL"
 }
 
 # Function to install Go if needed
@@ -199,8 +208,8 @@ create_systemd_service() {
     cat > /etc/systemd/system/security-manager-ingest.service << EOF
 [Unit]
 Description=Security Manager Ingest Server v1.0.7
-After=network.target postgresql.service
-Wants=postgresql.service
+After=network.target
+Requires=network.target
 
 [Service]
 Type=simple
@@ -213,10 +222,10 @@ RestartSec=5
 StandardOutput=journal
 StandardError=journal
 
-# Environment variables
-Environment=DATABASE_URL=postgresql://$POSTGRES_USER:$POSTGRES_PASSWORD@localhost:5432/$POSTGRES_DB
-Environment=DB_HOST=localhost
-Environment=DB_PORT=5432
+# Environment variables for external PostgreSQL
+Environment=DATABASE_URL=$DATABASE_URL
+Environment=DB_HOST=$POSTGRES_HOST
+Environment=DB_PORT=$POSTGRES_PORT
 Environment=DB_USER=$POSTGRES_USER
 Environment=DB_PASSWORD=$POSTGRES_PASSWORD
 Environment=DB_NAME=$POSTGRES_DB
@@ -259,7 +268,7 @@ show_status() {
     systemctl status security-manager-ingest --no-pager -l
     echo ""
     log "🔗 Service is listening on port 9002"
-    log "🗄️  Database: postgresql://$POSTGRES_USER:***@localhost:5432/$POSTGRES_DB"
+    log "🗄️  Database: postgresql://$POSTGRES_USER:***@$POSTGRES_HOST:$POSTGRES_PORT/$POSTGRES_DB"
     echo ""
     log "✅ Security Manager v1.0.7 deployment complete!"
     echo ""
