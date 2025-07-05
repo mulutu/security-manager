@@ -79,14 +79,22 @@ jobs:
     - name: List downloaded files
       run: ls -la
 
+    - name: Delete existing release if it exists
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # Delete release if it exists
+        gh release delete ${{ github.ref_name }} --yes --cleanup-tag || true
+      continue-on-error: true
+
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
         files: |
           sm-agent-*
-          *.sha256
         draft: false
         prerelease: false
         generate_release_notes: true
+        fail_on_unmatched_files: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
