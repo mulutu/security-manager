@@ -151,6 +151,10 @@ EOF
 # Remove any existing go.sum and let Go generate correct checksums
 rm -f go.sum
 
+# Generate go.sum with correct checksums
+log_info "Generating dependency checksums..."
+go mod tidy
+
 # Build the agent
 log_info "Building agent..."
 cd cmd/agent
