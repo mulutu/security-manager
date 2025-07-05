@@ -289,9 +289,12 @@ show_status() {
 case $TYPE in
     "services"|"update")
         log "🔄 Updating Security Manager services..."
+        install_go
+        create_user
         setup_project
         build_services
         if [[ "$TYPE" == "services" ]]; then
+            create_systemd_service
             start_services
             show_status
         fi
