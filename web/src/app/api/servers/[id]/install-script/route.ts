@@ -99,7 +99,7 @@ function generateInstallCommand(config: {
   osType: string
   hostId: string
 }) {
-  const { orgId, apiKey, hostId, osType } = config
+  const { apiKey, osType } = config
   
   // Use the existing GitHub install script
   const baseUrl = 'https://raw.githubusercontent.com/mulutu/security-manager/main/installer'
@@ -107,11 +107,11 @@ function generateInstallCommand(config: {
   if (osType === 'windows') {
     // For Windows, you might need a PowerShell script - using placeholder for now
     return `# Windows installer not yet available - please use Linux/WSL
-# Set environment variables and run installer
-# $env:SM_ORG_ID="${orgId}"; $env:SM_TOKEN="${apiKey}"; $env:SM_HOST_ID="${hostId}"; curl -fsSL "${baseUrl}/install.ps1" | powershell`
+# Set token and run installer
+# $env:SM_TOKEN="${apiKey}"; curl -fsSL "${baseUrl}/install.ps1" | powershell`
   } else {
-    // For Linux and macOS, download script first then run with environment variables
-    // This approach ensures environment variables are properly passed to the script
-    return `curl -fsSL ${baseUrl}/install.sh -o /tmp/sm-install.sh && SM_ORG_ID="${orgId}" SM_TOKEN="${apiKey}" SM_HOST_ID="${hostId}" SM_INGEST_URL="178.79.139.38:9002" sudo -E bash /tmp/sm-install.sh && rm /tmp/sm-install.sh`
+    // For Linux and macOS, simplified approach - just pass the token
+    // The token contains all the necessary information (org, server, etc.)
+    return `SM_TOKEN="${apiKey}" curl -fsSL ${baseUrl}/install.sh | sudo bash`
   }
 } 

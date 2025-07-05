@@ -5,23 +5,25 @@ set -e
 # Pre-compiled binaries only - no source compilation
 
 # Configuration - Read from environment variables or use defaults
-ORG_ID=${SM_ORG_ID:-"demo"}
 TOKEN=${SM_TOKEN:-"sm_tok_demo123"}
 HOST_ID=${SM_HOST_ID:-$(hostname)}
-INGEST_URL=${SM_INGEST_URL:-"178.79.139.38:9002"}
+INGEST_URL="178.79.139.38:9002"
+
+# Extract organization ID from token (format: sm_orgid_timestamp_random)
+if [[ "$TOKEN" =~ ^sm_([^_]+)_[0-9]+_[a-zA-Z0-9]+$ ]]; then
+    ORG_ID="${BASH_REMATCH[1]}"
+    echo "🔧 Production mode detected - extracted org ID from token: $ORG_ID"
+else
+    ORG_ID="demo"
+    echo "⚠️  Demo mode - using default demo credentials"
+    echo "   To use production mode, provide a valid SM_TOKEN"
+fi
 INSTALL_DIR="/opt/security-manager"
 SERVICE_NAME="security-manager-agent"
 GITHUB_REPO="mulutu/security-manager"
 BINARY_BASE_URL="https://github.com/${GITHUB_REPO}/releases/latest/download"
 
-# Debug: Show what variables we received
-if [ "$ORG_ID" != "demo" ]; then
-    echo "🔧 Production mode detected - using provided credentials"
-else
-    echo "⚠️  Demo mode - using default demo credentials"
-    echo "   To use production mode, set environment variables:"
-    echo "   SM_ORG_ID, SM_TOKEN, SM_HOST_ID, SM_INGEST_URL"
-fi
+
 
 # Beautiful colors and styling
 RESET='\033[0m'
