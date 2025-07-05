@@ -1,8 +1,7 @@
 #!/bin/bash
 
-# Enhanced Security Manager - Automated Deployment Script
-# Version: 2.0 (Enhanced Engine)
-# Usage: ./deploy-enhanced.sh [options]
+# Security Manager v1.0.7 Enhanced Deployment Script
+# Auto-registration with PostgreSQL integration
 
 set -e
 
@@ -11,462 +10,297 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
-CYAN='\033[0;36m'
-BOLD='\033[1m'
-RESET='\033[0m'
+NC='\033[0m' # No Color
 
-# Emojis
-ROCKET="🚀"
-SHIELD="🛡️"
-CHECK="✅"
-CROSS="❌"
-WARNING="⚠️"
-INFO="ℹ️"
-GEAR="⚙️"
-FIRE="🔥"
-
-# Default configuration
-SERVICE_HOST="178.79.139.38"
-DEFAULT_ORG="demo"
-DEFAULT_TOKEN="sm_tok_demo123"
-DEPLOY_TYPE=""
-SKIP_TESTS=false
-VERBOSE=false
-
-# Print banner
-print_banner() {
-    echo -e "${PURPLE}${BOLD}"
-    echo "╔══════════════════════════════════════════════════════════════╗"
-    echo "║              Enhanced Security Manager v2.0                  ║"
-    echo "║          Production-Ready Threat Detection Engine            ║"
-    echo "╚══════════════════════════════════════════════════════════════╝"
-    echo -e "${RESET}"
+# Logging function
+log() {
+    echo -e "${GREEN}[$(date +'%Y-%m-%d %H:%M:%S')] $1${NC}"
 }
 
-# Logging functions
-log_info() {
-    echo -e "${BLUE}${INFO} $1${RESET}"
+warn() {
+    echo -e "${YELLOW}[$(date +'%Y-%m-%d %H:%M:%S')] WARNING: $1${NC}"
 }
 
-log_success() {
-    echo -e "${GREEN}${CHECK} $1${RESET}"
+error() {
+    echo -e "${RED}[$(date +'%Y-%m-%d %H:%M:%S')] ERROR: $1${NC}"
+    exit 1
 }
 
-log_warning() {
-    echo -e "${YELLOW}${WARNING} $1${RESET}"
-}
-
-log_error() {
-    echo -e "${RED}${CROSS} $1${RESET}"
-}
-
-log_step() {
-    echo -e "${CYAN}${BOLD}${GEAR} $1${RESET}"
-}
-
-# Usage information
-show_usage() {
-    echo "Enhanced Security Manager Deployment Script"
-    echo ""
-    echo "Usage: $0 [OPTIONS]"
-    echo ""
-    echo "Options:"
-    echo "  -t, --type TYPE           Deployment type: 'services', 'agent', or 'full'"
-    echo "  -s, --service-host HOST   Service host IP (default: $SERVICE_HOST)"
-    echo "  -o, --org ORG_ID         Organization ID (default: $DEFAULT_ORG)"
-    echo "  -k, --token TOKEN        Authentication token (default: $DEFAULT_TOKEN)"
-    echo "  --skip-tests             Skip validation tests"
-    echo "  -v, --verbose            Enable verbose output"
-    echo "  -h, --help               Show this help message"
-    echo ""
-    echo "Deployment Types:"
-    echo "  services    Deploy enhanced services on central host"
-    echo "  agent       Deploy enhanced agent on current host"
-    echo "  full        Deploy both services and agent (default)"
-    echo ""
-    echo "Examples:"
-    echo "  $0 --type services                    # Deploy services only"
-    echo "  $0 --type agent --org myorg           # Deploy agent only"
-    echo "  $0 --type full --service-host 1.2.3.4 # Full deployment"
-    echo ""
-}
+# Default values
+TYPE="services"
+PROJECT_DIR="/opt/security-manager"
+SERVICE_USER="security-manager"
+POSTGRES_DB="security_manager"
+POSTGRES_USER="security_manager"
+POSTGRES_PASSWORD=""
 
 # Parse command line arguments
-parse_args() {
-    while [[ $# -gt 0 ]]; do
-        case $1 in
-            -t|--type)
-                DEPLOY_TYPE="$2"
-                shift 2
-                ;;
-            -s|--service-host)
-                SERVICE_HOST="$2"
-                shift 2
-                ;;
-            -o|--org)
-                DEFAULT_ORG="$2"
-                shift 2
-                ;;
-            -k|--token)
-                DEFAULT_TOKEN="$2"
-                shift 2
-                ;;
-            --skip-tests)
-                SKIP_TESTS=true
-                shift
-                ;;
-            -v|--verbose)
-                VERBOSE=true
-                shift
-                ;;
-            -h|--help)
-                show_usage
-                exit 0
-                ;;
-            *)
-                log_error "Unknown option: $1"
-                show_usage
-                exit 1
-                ;;
-        esac
-    done
-
-    # Set default deployment type
-    if [[ -z "$DEPLOY_TYPE" ]]; then
-        DEPLOY_TYPE="full"
-    fi
-
-    # Validate deployment type
-    if [[ ! "$DEPLOY_TYPE" =~ ^(services|agent|full)$ ]]; then
-        log_error "Invalid deployment type: $DEPLOY_TYPE"
-        show_usage
-        exit 1
-    fi
-}
-
-# Check prerequisites
-check_prerequisites() {
-    log_step "Checking prerequisites..."
-
-    # Check if running as root for agent deployment
-    if [[ "$DEPLOY_TYPE" =~ ^(agent|full)$ ]] && [[ $EUID -ne 0 ]]; then
-        log_error "Agent deployment requires root privileges. Please run with sudo."
-        exit 1
-    fi
-
-    # Check required tools
-    local required_tools=("curl" "git")
-    if [[ "$DEPLOY_TYPE" =~ ^(services|full)$ ]]; then
-        required_tools+=("docker" "docker-compose")
-    fi
-
-    for tool in "${required_tools[@]}"; do
-        if ! command -v "$tool" &> /dev/null; then
-            log_error "Required tool not found: $tool"
-            exit 1
-        fi
-    done
-
-    # Check network connectivity
-    if ! curl -s --connect-timeout 5 "http://$SERVICE_HOST" &> /dev/null; then
-        log_warning "Cannot reach service host: $SERVICE_HOST"
-        if [[ "$DEPLOY_TYPE" == "agent" ]]; then
-            log_error "Agent deployment requires connectivity to service host"
-            exit 1
-        fi
-    fi
-
-    log_success "Prerequisites check completed"
-}
-
-# Deploy enhanced services
-deploy_services() {
-    log_step "Deploying enhanced services on $SERVICE_HOST..."
-
-    # Clone/update repository
-    if [[ -d "security-manager" ]]; then
-        log_info "Updating existing repository..."
-        cd security-manager
-        git pull origin main
-    else
-        log_info "Cloning repository..."
-        git clone https://github.com/mulutu/security-manager.git
-        cd security-manager
-    fi
-
-    # Stop existing services
-    log_info "Stopping existing services..."
-    cd deploy
-    docker-compose -f docker-compose.prod.yml down || true
-
-    # Build and start enhanced services
-    log_info "Building and starting enhanced services..."
-    docker-compose -f docker-compose.prod.yml up --build -d
-
-    # Wait for services to be ready
-    log_info "Waiting for services to be ready..."
-    local max_attempts=30
-    local attempt=0
-
-    while [[ $attempt -lt $max_attempts ]]; do
-        if curl -s "http://localhost/health" &> /dev/null; then
-            break
-        fi
-        sleep 2
-        ((attempt++))
-    done
-
-    if [[ $attempt -eq $max_attempts ]]; then
-        log_error "Services failed to start within timeout"
-        docker-compose -f docker-compose.prod.yml logs
-        exit 1
-    fi
-
-    # Verify enhanced features
-    log_info "Verifying enhanced services..."
-    
-    # Check ClickHouse tables
-    local tables=$(curl -s "http://localhost:8123/" -d "SELECT name FROM system.tables WHERE database = 'default'" | wc -l)
-    if [[ $tables -lt 5 ]]; then
-        log_error "Enhanced ClickHouse tables not created properly"
-        exit 1
-    fi
-
-    # Check NATS streams
-    if ! curl -s "http://localhost:8222/jsz" | grep -q "LOGS"; then
-        log_error "NATS streams not configured properly"
-        exit 1
-    fi
-
-    log_success "Enhanced services deployed successfully"
-    
-    # Show service URLs
-    echo ""
-    log_info "Service URLs:"
-    echo "  📊 ClickHouse UI: http://$SERVICE_HOST:8123"
-    echo "  📡 NATS Monitor:  http://$SERVICE_HOST:8222"
-    echo "  🏥 Health Check:  http://$SERVICE_HOST/health"
-    echo "  🔌 gRPC Ingest:   $SERVICE_HOST:9002"
-}
-
-# Deploy enhanced agent
-deploy_agent() {
-    log_step "Deploying enhanced agent..."
-
-    # Download and run installer
-    log_info "Downloading enhanced agent installer..."
-    curl -fsSL https://raw.githubusercontent.com/mulutu/security-manager/main/installer/install.sh | bash -s -- \
-        --org "$DEFAULT_ORG" \
-        --token "$DEFAULT_TOKEN" \
-        --ingest "$SERVICE_HOST:9002"
-
-    # Verify agent installation
-    log_info "Verifying agent installation..."
-    sleep 5
-
-    if ! systemctl is-active --quiet security-manager-agent; then
-        log_error "Agent service is not running"
-        systemctl status security-manager-agent
-        exit 1
-    fi
-
-    # Check enhanced collectors
-    log_info "Verifying enhanced collectors..."
-    local collectors=("systemd journal" "process monitoring" "network monitoring" "system metrics" "filesystem monitoring" "mitigation listener")
-    local found_collectors=0
-
-    for collector in "${collectors[@]}"; do
-        if journalctl -u security-manager-agent -n 100 | grep -q "$collector"; then
-            ((found_collectors++))
-        fi
-    done
-
-    if [[ $found_collectors -lt 4 ]]; then
-        log_warning "Some enhanced collectors may not be running properly"
-        journalctl -u security-manager-agent -n 50
-    fi
-
-    log_success "Enhanced agent deployed successfully"
-    
-    # Show management commands
-    echo ""
-    log_info "Agent management commands:"
-    echo "  🟢 Start:    systemctl start security-manager-agent"
-    echo "  🔴 Stop:     systemctl stop security-manager-agent"
-    echo "  📊 Status:   systemctl status security-manager-agent"
-    echo "  📋 Logs:     journalctl -u security-manager-agent -f"
-    echo "  🔄 Restart:  systemctl restart security-manager-agent"
-}
-
-# Run validation tests
-run_tests() {
-    if [[ "$SKIP_TESTS" == true ]]; then
-        log_info "Skipping validation tests"
-        return
-    fi
-
-    log_step "Running enhanced validation tests..."
-
-    # Download test tool if not available
-    if [[ ! -f "tools/test_enhanced/main.go" ]]; then
-        log_info "Downloading test suite..."
-        if [[ ! -d "security-manager" ]]; then
-            git clone https://github.com/mulutu/security-manager.git
-        fi
-        cd security-manager
-    fi
-
-    # Run comprehensive tests
-    log_info "Executing comprehensive test suite..."
-    if command -v go &> /dev/null; then
-        go run tools/test_enhanced/main.go \
-            -ingest "$SERVICE_HOST:9002" \
-            -org "$DEFAULT_ORG" \
-            -token "$DEFAULT_TOKEN" \
-            -host "test-enhanced-$(date +%s)"
-    else
-        log_warning "Go not available, skipping test suite"
-        log_info "Manual testing recommended using: go run tools/test_enhanced/main.go"
-    fi
-
-    log_success "Validation tests completed"
-}
-
-# Test security features
-test_security_features() {
-    log_step "Testing security features..."
-
-    # Test SSH brute force detection
-    log_info "Testing SSH brute force detection..."
-    for i in {1..6}; do
-        echo "$(date) Failed password for testuser$i from 192.168.1.100 port 22 ssh2" | tee -a /var/log/auth.log
-        sleep 1
-    done
-
-    # Test system metrics
-    log_info "Testing system metrics collection..."
-    echo "$(date) High CPU usage: 95.2%" | tee -a /var/log/syslog
-    echo "$(date) High disk usage: 92.1%" | tee -a /var/log/syslog
-
-    # Test process monitoring
-    log_info "Testing process monitoring..."
-    echo "$(date) Process started: nc (PID: 12345)" | tee -a /var/log/syslog
-
-    # Wait for processing
-    sleep 10
-
-    # Check for mitigation responses
-    log_info "Checking for mitigation responses..."
-    if journalctl -u security-manager-agent -n 20 | grep -q "mitigation"; then
-        log_success "Mitigation system responding correctly"
-    else
-        log_warning "No mitigation responses detected"
-    fi
-
-    # Check iptables for blocked IPs
-    if iptables -L INPUT -n | grep -q "192.168.1.100"; then
-        log_success "IP blocking working correctly"
-        # Clean up test rule
-        iptables -D INPUT -s 192.168.1.100 -j DROP 2>/dev/null || true
-    else
-        log_warning "IP blocking not detected"
-    fi
-
-    log_success "Security features test completed"
-}
-
-# Show deployment summary
-show_summary() {
-    echo ""
-    echo -e "${PURPLE}${BOLD}╔══════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${PURPLE}${BOLD}║                    Deployment Summary                        ║${RESET}"
-    echo -e "${PURPLE}${BOLD}╚══════════════════════════════════════════════════════════════╝${RESET}"
-    echo ""
-
-    if [[ "$DEPLOY_TYPE" =~ ^(services|full)$ ]]; then
-        echo -e "${GREEN}${CHECK} Enhanced Services Deployed${RESET}"
-        echo "  📊 ClickHouse with 5 specialized tables"
-        echo "  🔍 Rules engine with 8 security rules"
-        echo "  🛡️ Active mitigation system"
-        echo "  📡 NATS messaging with JetStream"
-        echo ""
-    fi
-
-    if [[ "$DEPLOY_TYPE" =~ ^(agent|full)$ ]]; then
-        echo -e "${GREEN}${CHECK} Enhanced Agent Deployed${RESET}"
-        echo "  📋 Systemd journal monitoring"
-        echo "  🔐 Authentication event tracking"
-        echo "  ⚙️ Process creation/termination monitoring"
-        echo "  🌐 Network connection analysis"
-        echo "  📊 System metrics collection"
-        echo "  📁 File system change detection"
-        echo "  🛡️ Active mitigation capabilities"
-        echo ""
-    fi
-
-    echo -e "${CYAN}${BOLD}🎯 Production Capabilities:${RESET}"
-    echo "  ⚡ < 1 second threat detection"
-    echo "  🛡️ < 3 seconds automated response"
-    echo "  📊 10,000+ events/second processing"
-    echo "  🔍 Enterprise-grade security monitoring"
-    echo ""
-
-    echo -e "${YELLOW}${BOLD}📊 Monitoring Dashboards:${RESET}"
-    echo "  🔗 NATS Monitor:  http://$SERVICE_HOST:8222"
-    echo "  📊 ClickHouse UI: http://$SERVICE_HOST:8123"
-    echo "  🏥 Health Check:  http://$SERVICE_HOST/health"
-    echo ""
-
-    echo -e "${BLUE}${BOLD}🔧 Next Steps:${RESET}"
-    echo "  1. Monitor security events in ClickHouse dashboard"
-    echo "  2. Review and customize detection rules"
-    echo "  3. Set up alerting and notifications"
-    echo "  4. Deploy to additional servers"
-    echo "  5. Build custom monitoring dashboard"
-    echo ""
-
-    echo -e "${GREEN}${ROCKET} Enhanced Security Manager is now production-ready! ${ROCKET}${RESET}"
-}
-
-# Main deployment function
-main() {
-    print_banner
-    parse_args "$@"
-    check_prerequisites
-
-    log_info "Starting enhanced deployment (type: $DEPLOY_TYPE)"
-    log_info "Service host: $SERVICE_HOST"
-    log_info "Organization: $DEFAULT_ORG"
-    echo ""
-
-    case "$DEPLOY_TYPE" in
-        "services")
-            deploy_services
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --type)
+            TYPE="$2"
+            shift 2
             ;;
-        "agent")
-            deploy_agent
-            if [[ "$SKIP_TESTS" == false ]]; then
-                test_security_features
-            fi
+        --project-dir)
+            PROJECT_DIR="$2"
+            shift 2
             ;;
-        "full")
-            deploy_services
+        --postgres-password)
+            POSTGRES_PASSWORD="$2"
+            shift 2
+            ;;
+        -h|--help)
+            echo "Security Manager v1.0.7 Enhanced Deployment"
             echo ""
-            deploy_agent
+            echo "Usage: $0 [options]"
             echo ""
-            run_tests
-            if [[ "$SKIP_TESTS" == false ]]; then
-                test_security_features
-            fi
+            echo "Options:"
+            echo "  --type TYPE                 Deployment type (services, update, full) [default: services]"
+            echo "  --project-dir DIR          Project directory [default: /opt/security-manager]"
+            echo "  --postgres-password PASS   PostgreSQL password (will prompt if not provided)"
+            echo "  -h, --help                 Show this help message"
+            echo ""
+            echo "Examples:"
+            echo "  $0 --type services                    # Update services only"
+            echo "  $0 --type update                      # Update code and restart"
+            echo "  $0 --type full                        # Full deployment with dependencies"
+            exit 0
+            ;;
+        *)
+            error "Unknown option: $1"
             ;;
     esac
+done
 
-    show_summary
+# Check if running as root
+if [[ $EUID -ne 0 ]]; then
+    error "This script must be run as root (use sudo)"
+fi
+
+log "🚀 Starting Security Manager v1.0.7 Enhanced Deployment"
+log "Type: $TYPE"
+log "Project Directory: $PROJECT_DIR"
+
+# Function to check if PostgreSQL is running
+check_postgres() {
+    log "🔍 Checking PostgreSQL status..."
+    if systemctl is-active --quiet postgresql; then
+        log "✅ PostgreSQL is running"
+        return 0
+    else
+        warn "PostgreSQL is not running"
+        return 1
+    fi
 }
 
-# Error handling
-trap 'log_error "Deployment failed at line $LINENO. Check the logs above for details."' ERR
+# Function to setup PostgreSQL database
+setup_postgres() {
+    log "🗄️  Setting up PostgreSQL database..."
+    
+    if ! check_postgres; then
+        log "📦 Installing PostgreSQL..."
+        apt-get update
+        apt-get install -y postgresql postgresql-contrib
+        systemctl start postgresql
+        systemctl enable postgresql
+    fi
+    
+    # Get PostgreSQL password if not provided
+    if [[ -z "$POSTGRES_PASSWORD" ]]; then
+        echo -n "Enter PostgreSQL password for user '$POSTGRES_USER': "
+        read -s POSTGRES_PASSWORD
+        echo
+    fi
+    
+    # Create database and user
+    log "🔧 Creating database and user..."
+    sudo -u postgres psql -c "CREATE DATABASE $POSTGRES_DB;" 2>/dev/null || true
+    sudo -u postgres psql -c "CREATE USER $POSTGRES_USER WITH PASSWORD '$POSTGRES_PASSWORD';" 2>/dev/null || true
+    sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE $POSTGRES_DB TO $POSTGRES_USER;" 2>/dev/null || true
+    sudo -u postgres psql -c "ALTER USER $POSTGRES_USER CREATEDB;" 2>/dev/null || true
+    
+    log "✅ PostgreSQL setup complete"
+}
 
-# Run main function
-main "$@" 
+# Function to install Go if needed
+install_go() {
+    if command -v go &> /dev/null; then
+        log "✅ Go is already installed ($(go version))"
+        return 0
+    fi
+    
+    log "📦 Installing Go..."
+    GO_VERSION="1.21.5"
+    cd /tmp
+    wget -q "https://golang.org/dl/go${GO_VERSION}.linux-amd64.tar.gz"
+    tar -C /usr/local -xzf "go${GO_VERSION}.linux-amd64.tar.gz"
+    
+    # Add Go to PATH
+    echo 'export PATH=$PATH:/usr/local/go/bin' >> /etc/profile
+    export PATH=$PATH:/usr/local/go/bin
+    
+    log "✅ Go installed successfully"
+}
+
+# Function to create system user
+create_user() {
+    if id "$SERVICE_USER" &>/dev/null; then
+        log "✅ User $SERVICE_USER already exists"
+    else
+        log "👤 Creating system user $SERVICE_USER..."
+        useradd --system --shell /bin/false --home-dir /var/lib/security-manager --create-home $SERVICE_USER
+    fi
+}
+
+# Function to setup project directory
+setup_project() {
+    log "📁 Setting up project directory..."
+    
+    if [[ -d "$PROJECT_DIR" ]]; then
+        log "📂 Project directory exists, updating..."
+        cd "$PROJECT_DIR"
+        git pull origin main
+    else
+        log "📂 Cloning project..."
+        mkdir -p "$(dirname "$PROJECT_DIR")"
+        git clone https://github.com/mulutu/security-manager.git "$PROJECT_DIR"
+        cd "$PROJECT_DIR"
+    fi
+    
+    # Set ownership
+    chown -R $SERVICE_USER:$SERVICE_USER "$PROJECT_DIR"
+    
+    log "✅ Project setup complete"
+}
+
+# Function to build services
+build_services() {
+    log "🔨 Building services..."
+    cd "$PROJECT_DIR"
+    
+    # Build ingest server
+    log "Building ingest server..."
+    sudo -u $SERVICE_USER /usr/local/go/bin/go build -o ingest ./cmd/ingest
+    
+    # Build agent (for local testing)
+    log "Building agent..."
+    sudo -u $SERVICE_USER /usr/local/go/bin/go build -o agent ./cmd/agent
+    
+    # Set permissions
+    chmod +x ingest agent
+    
+    log "✅ Build complete"
+}
+
+# Function to create systemd service
+create_systemd_service() {
+    log "🔧 Creating systemd service..."
+    
+    cat > /etc/systemd/system/security-manager-ingest.service << EOF
+[Unit]
+Description=Security Manager Ingest Server v1.0.7
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=$SERVICE_USER
+Group=$SERVICE_USER
+WorkingDirectory=$PROJECT_DIR
+ExecStart=$PROJECT_DIR/ingest
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Environment variables
+Environment=DATABASE_URL=postgresql://$POSTGRES_USER:$POSTGRES_PASSWORD@localhost:5432/$POSTGRES_DB
+Environment=DB_HOST=localhost
+Environment=DB_PORT=5432
+Environment=DB_USER=$POSTGRES_USER
+Environment=DB_PASSWORD=$POSTGRES_PASSWORD
+Environment=DB_NAME=$POSTGRES_DB
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=$PROJECT_DIR
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
+    log "✅ Systemd service created"
+}
+
+# Function to start services
+start_services() {
+    log "🚀 Starting services..."
+    
+    systemctl enable security-manager-ingest
+    systemctl restart security-manager-ingest
+    
+    # Wait a moment and check status
+    sleep 3
+    if systemctl is-active --quiet security-manager-ingest; then
+        log "✅ Security Manager Ingest Server is running"
+    else
+        error "❌ Failed to start Security Manager Ingest Server"
+    fi
+}
+
+# Function to show status
+show_status() {
+    log "📊 Service Status:"
+    echo ""
+    systemctl status security-manager-ingest --no-pager -l
+    echo ""
+    log "🔗 Service is listening on port 9002"
+    log "🗄️  Database: postgresql://$POSTGRES_USER:***@localhost:5432/$POSTGRES_DB"
+    echo ""
+    log "✅ Security Manager v1.0.7 deployment complete!"
+    echo ""
+    log "🎯 New Features Available:"
+    log "   • Auto-registration of agents"
+    log "   • PostgreSQL integration"
+    log "   • Enhanced system detection"
+    log "   • One-click server addition in dashboard"
+    echo ""
+    log "📝 Next Steps:"
+    log "   1. Access your dashboard and click 'Add Server'"
+    log "   2. Copy the generated curl command"
+    log "   3. Run on any server to auto-register agents"
+    echo ""
+}
+
+# Main deployment logic
+case $TYPE in
+    "services"|"update")
+        log "🔄 Updating Security Manager services..."
+        setup_project
+        build_services
+        if [[ "$TYPE" == "services" ]]; then
+            start_services
+            show_status
+        fi
+        ;;
+    "full")
+        log "🚀 Full Security Manager deployment..."
+        install_go
+        create_user
+        setup_postgres
+        setup_project
+        build_services
+        create_systemd_service
+        start_services
+        show_status
+        ;;
+    *)
+        error "Unknown deployment type: $TYPE"
+        ;;
+esac
+
+log "🎉 Deployment completed successfully!" 
