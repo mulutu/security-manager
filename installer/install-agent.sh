@@ -146,13 +146,8 @@ require (
 )
 EOF
 
-# Create a minimal go.sum to avoid any dependency resolution
-cat > go.sum << EOF
-google.golang.org/grpc v1.50.1 h1:fPVVDxY9w++VjTZsYvXWqEf9Rqar/e+9zYfxKK+W+YU=
-google.golang.org/grpc v1.50.1/go.mod h1:ZgQEeidpAuNRZ8iRrlBKXZQP1ghovWIVhdJRyCDK+GI=
-google.golang.org/protobuf v1.28.1 h1:d0NfwRgPtno5B1Wa6L2DAG+KdqDvb9wLpRGh3y/4gqo=
-google.golang.org/protobuf v1.28.1/go.mod h1:HV8QOd/L58Z+nl8r43ehVNZIU/HEI6OcFqwMG9pJV4I=
-EOF
+# Remove any existing go.sum to let Go generate correct checksums
+rm -f go.sum
 
 # Temporarily comment out NATS and ClickHouse imports in the agent code
 log_info "Temporarily disabling problematic imports for build..."
