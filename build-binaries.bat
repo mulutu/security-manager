@@ -15,7 +15,7 @@ echo Building Linux AMD64 binary...
 set GOOS=linux
 set GOARCH=amd64
 set CGO_ENABLED=0
-go build -ldflags="-s -w -X main.version=v1.0.3" -o sm-agent-linux-amd64 ..\cmd\agent
+go build -ldflags="-s -w -X main.version=v1.0.4" -o sm-agent-linux-amd64 ..\cmd\agent
 if %ERRORLEVEL% neq 0 (
     echo ERROR: Failed to build Linux AMD64 binary
     goto :error
@@ -23,7 +23,7 @@ if %ERRORLEVEL% neq 0 (
 
 echo Building Linux ARM64 binary...
 set GOARCH=arm64
-go build -ldflags="-s -w -X main.version=v1.0.3" -o sm-agent-linux-arm64 ..\cmd\agent
+go build -ldflags="-s -w -X main.version=v1.0.4" -o sm-agent-linux-arm64 ..\cmd\agent
 if %ERRORLEVEL% neq 0 (
     echo ERROR: Failed to build Linux ARM64 binary
     goto :error
@@ -32,7 +32,7 @@ if %ERRORLEVEL% neq 0 (
 echo Building Linux ARM binary...
 set GOARCH=arm
 set GOARM=7
-go build -ldflags="-s -w -X main.version=v1.0.3" -o sm-agent-linux-arm ..\cmd\agent
+go build -ldflags="-s -w -X main.version=v1.0.4" -o sm-agent-linux-arm ..\cmd\agent
 if %ERRORLEVEL% neq 0 (
     echo ERROR: Failed to build Linux ARM binary
     goto :error
