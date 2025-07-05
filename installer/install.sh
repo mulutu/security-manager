@@ -36,6 +36,50 @@ log_info "  Organization: $ORG_ID"
 log_info "  Ingest URL: $INGEST_URL"
 echo
 
+# Clean up any existing installation
+cleanup_existing() {
+    local is_existing=false
+    
+    # Check if this is a reinstall
+    if systemctl is-active --quiet ${SERVICE_NAME} 2>/dev/null || [ -d "$INSTALL_DIR" ]; then
+        is_existing=true
+        log_info "🔄 Existing installation detected - performing upgrade/reinstall..."
+    else
+        log_info "✨ Fresh installation detected"
+    fi
+    
+    # Stop existing service if running
+    if systemctl is-active --quiet ${SERVICE_NAME} 2>/dev/null; then
+        log_info "Stopping existing service..."
+        systemctl stop ${SERVICE_NAME} || true
+    fi
+    
+    # Disable existing service if enabled
+    if systemctl is-enabled --quiet ${SERVICE_NAME} 2>/dev/null; then
+        log_info "Disabling existing service..."
+        systemctl disable ${SERVICE_NAME} || true
+    fi
+    
+    # Remove existing installation directory
+    if [ -d "$INSTALL_DIR" ]; then
+        log_info "Removing existing installation..."
+        rm -rf "$INSTALL_DIR"
+    fi
+    
+    # Remove existing service file
+    if [ -f "/etc/systemd/system/${SERVICE_NAME}.service" ]; then
+        log_info "Removing existing service configuration..."
+        rm -f "/etc/systemd/system/${SERVICE_NAME}.service"
+        systemctl daemon-reload
+    fi
+    
+    if [ "$is_existing" = true ]; then
+        log_success "Cleaned up existing installation - ready for upgrade"
+    else
+        log_success "System prepared for fresh installation"
+    fi
+}
+
 # Detect platform
 detect_platform() {
     local os=$(uname -s | tr '[:upper:]' '[:lower:]')
@@ -176,9 +220,10 @@ verify_installation() {
     sleep 3
 
     if systemctl is-active --quiet ${SERVICE_NAME}; then
-        log_success "Security Manager Agent installed and running successfully!"
-        log_success "Service: $SERVICE_NAME"
-        log_success "Status: $(systemctl is-active ${SERVICE_NAME})"
+        log_success "🎉 Security Manager Agent installed and running successfully!"
+        log_success "📊 Service: $SERVICE_NAME"
+        log_success "🟢 Status: $(systemctl is-active ${SERVICE_NAME})"
+        log_success "🔗 Connected to: $INGEST_URL"
     else
         log_error "Service failed to start. Check logs with: journalctl -u ${SERVICE_NAME}"
         exit 1
@@ -187,6 +232,9 @@ verify_installation() {
 
 # Main installation flow
 main() {
+    # Clean up any existing installation first
+    cleanup_existing
+    
     # Download pre-compiled binary
     download_binary
     
