@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"crypto/tls"
-	"fmt"
 	"log"
 	"net"
 	"os"
@@ -12,16 +11,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ClickHouse/clickhouse-go/v2"
+	"github.com/mulutu/security-manager/internal/database"
 	"github.com/mulutu/security-manager/internal/proto"
 	"github.com/nats-io/nats.go"
 
-	// "github.com/nats-io/nats.go" // Temporarily disabled for Go 1.18 compatibility
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/status"
-	gproto "google.golang.org/protobuf/proto" // alias to avoid name clash
 )
 
 const subjFmt = "logs.%s.%s" // org_id, host_id
@@ -45,26 +40,12 @@ func validateToken(token string) string {
 	return "" // Invalid token format
 }
 
-// autoRegisterAgent creates or updates an agent in the database
-func autoRegisterAgent(req *proto.AuthRequest) (string, error) {
-	// For now, simulate database registration
-	// In production, this would connect to PostgreSQL/Prisma
-	agentID := fmt.Sprintf("agent_%s_%d", req.Hostname, time.Now().Unix())
-
-	log.Printf("🎯 Auto-registering agent: %s (%s) - %s %s",
-		req.Hostname, req.IpAddress, req.OsType, req.OsVersion)
-
-	// TODO: Connect to actual database and create/update agent record
-	// This would call the same database that the web dashboard uses
-
-	return agentID, nil
-}
-
 // ─── gRPC server implementation ──────────────────────────────────────────
 
 type ingestServer struct {
 	proto.UnimplementedAgentIngestServer
 	js nats.JetStreamContext
+	db *database.DB
 }
 
 func (s *ingestServer) Authenticate(ctx context.Context, req *proto.AuthRequest) (*proto.AuthResponse, error) {
@@ -90,13 +71,25 @@ func (s *ingestServer) Authenticate(ctx context.Context, req *proto.AuthRequest)
 	// Auto-register the agent if system info is provided
 	var agentID string
 	var registered bool
-	if req.Hostname != "" && req.IpAddress != "" {
-		if id, err := autoRegisterAgent(req); err == nil {
-			agentID = id
-			registered = true
-			log.Printf("✅ Agent auto-registered: %s", agentID)
-		} else {
+	if req.Hostname != "" && req.IpAddress != "" && s.db != nil {
+		agent, err := s.db.UpsertAgent(
+			req.OrgId,
+			req.Hostname, // Use hostname as hostId
+			req.Hostname,
+			req.IpAddress,
+			req.OsType,
+			req.OsVersion,
+			req.AgentVersion,
+			req.Capabilities,
+		)
+		if err != nil {
 			log.Printf("⚠️  Auto-registration failed: %v", err)
+			// Don't fail authentication if registration fails
+		} else {
+			agentID = agent.ID
+			registered = true
+			log.Printf("✅ Agent auto-registered: %s (%s) - %s %s",
+				agent.Name, agent.IPAddress, agent.OSInfo, agent.Status)
 		}
 	}
 
@@ -112,288 +105,111 @@ func (s *ingestServer) Authenticate(ctx context.Context, req *proto.AuthRequest)
 }
 
 func (s *ingestServer) StreamEvents(stream proto.AgentIngest_StreamEventsServer) error {
-	for {
-		ev, err := stream.Recv()
-		if err != nil {
-			return err // client closed stream
-		}
-		subj := fmt.Sprintf(subjFmt, ev.OrgId, ev.HostId)
+	log.Printf("📡 New stream connection established")
 
-		data, _ := gproto.Marshal(ev) // use the aliased helper
-		if _, err := s.js.PublishAsync(subj, data); err != nil {
-			log.Printf("nats publish error: %v", err)
+	for {
+		event, err := stream.Recv()
+		if err != nil {
+			log.Printf("Stream ended: %v", err)
+			break
 		}
+
+		// Update agent status to ONLINE when we receive events
+		if s.db != nil && event.Stream == "heartbeat" {
+			if err := s.db.UpdateAgentStatus(event.OrgId, event.HostId, "ONLINE"); err != nil {
+				log.Printf("Warning: failed to update agent status: %v", err)
+			}
+		}
+
+		log.Printf("📊 Event: %s/%s [%s] %s",
+			event.OrgId, event.HostId, event.Stream, event.Message)
+
+		// TODO: Store in ClickHouse
+		// TODO: Publish to NATS for real-time processing
 	}
+
+	return stream.SendAndClose(&proto.Ack{})
 }
 
 func (s *ingestServer) ReceiveCommands(stream proto.AgentIngest_ReceiveCommandsServer) error {
-	// Get client context for organization and host identification
-	ctx := stream.Context()
+	log.Printf("🎯 New command stream established")
 
-	// Extract org_id and host_id from context metadata (simplified for now)
-	// In production, this would come from authenticated session
-	orgID := "demo"     // TODO: Extract from authenticated context
-	hostID := "unknown" // TODO: Extract from authenticated context
-
-	log.Printf("🔗 Command stream established for %s/%s", orgID, hostID)
-
-	// Subscribe to commands for this specific agent
-	subject := fmt.Sprintf("commands.%s.%s", orgID, hostID)
-	sub, err := s.js.PullSubscribe(subject, fmt.Sprintf("agent-%s-%s", orgID, hostID))
-	if err != nil {
-		return status.Errorf(codes.Internal, "failed to subscribe to commands: %v", err)
-	}
-	defer sub.Unsubscribe()
-
-	// Handle bidirectional streaming
-	go func() {
-		// Listen for responses from agent
-		for {
-			resp, err := stream.Recv()
-			if err != nil {
-				log.Printf("Command stream recv error: %v", err)
-				return
-			}
-
-			// Log mitigation response
-			status := "SUCCESS"
-			if !resp.Success {
-				status = "FAILED"
-			}
-			log.Printf("📥 Mitigation response %s: %s - %s", resp.RequestId, status, resp.ErrorMessage)
-
-			// Store response in ClickHouse for audit trail
-			// TODO: Implement audit logging
-		}
-	}()
-
-	// Send commands to agent
+	// Keep the connection alive for bidirectional communication
 	for {
 		select {
-		case <-ctx.Done():
-			return nil
+		case <-stream.Context().Done():
+			return stream.Context().Err()
 		default:
-			// Fetch pending commands
-			msgs, err := sub.Fetch(10, nats.MaxWait(1*time.Second))
-			if err != nil {
-				continue
-			}
-
-			for _, msg := range msgs {
-				// Parse command
-				var cmd proto.MitigateRequest
-				if err := gproto.Unmarshal(msg.Data, &cmd); err != nil {
-					msg.Nak()
-					continue
-				}
-
-				// Send command to agent
-				if err := stream.Send(&cmd); err != nil {
-					log.Printf("Failed to send command to agent: %v", err)
-					msg.Nak()
-					return err
-				}
-
-				log.Printf("📤 Command sent to agent: %s", cmd.RequestId)
-				msg.Ack()
-			}
+			// TODO: Listen for mitigation commands from the SaaS
+			time.Sleep(1 * time.Second)
 		}
 	}
 }
 
-// ─── main ────────────────────────────────────────────────────────────────
+// ─── Main function ────────────────────────────────────────────────────────
 
 func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
+	log.Printf("🚀 Security Manager Ingest Server v1.0.7")
 
-	// 1️⃣  NATS JetStream
-	nc, err := nats.Connect(getEnv("NATS_URL", "nats://localhost:4222"))
+	// Connect to PostgreSQL database
+	db, err := database.Connect()
 	if err != nil {
-		log.Fatalf("nats: %v", err)
+		log.Printf("⚠️  Database connection failed: %v", err)
+		log.Printf("🔄 Continuing without database (auto-registration disabled)")
+		db = nil
 	}
-	js, _ := nc.JetStream()
-	js.AddStream(&nats.StreamConfig{Name: "LOGS", Subjects: []string{"logs.>"}})
-
-	// 2️⃣  ClickHouse + Create Tables
-	ch, err := clickhouse.Open(&clickhouse.Options{
-		Addr: []string{getEnv("CLICKHOUSE_ADDR", "localhost:9000")},
-	})
-	if err != nil {
-		log.Fatalf("clickhouse: %v", err)
-	}
-
-	// Create tables if they don't exist
-	if err := createTables(ctx, ch); err != nil {
-		log.Fatalf("create tables: %v", err)
-	}
-
-	// 3️⃣  gRPC server with TLS
-	lis, err := net.Listen("tcp", ":9002")
-	if err != nil {
-		log.Fatalf("listen: %v", err)
-	}
-
-	var grpcSrv *grpc.Server
-	if getEnv("TLS_ENABLED", "false") == "true" {
-		// Load TLS certificates
-		cert, err := tls.LoadX509KeyPair(
-			getEnv("TLS_CERT_FILE", "server.crt"),
-			getEnv("TLS_KEY_FILE", "server.key"),
-		)
-		if err != nil {
-			log.Fatalf("load TLS certs: %v", err)
-		}
-
-		creds := credentials.NewTLS(&tls.Config{
-			Certificates: []tls.Certificate{cert},
-		})
-		grpcSrv = grpc.NewServer(grpc.Creds(creds))
-		log.Println("ingest gRPC listening on :9002 with TLS")
-	} else {
-		grpcSrv = grpc.NewServer()
-		log.Println("ingest gRPC listening on :9002 (insecure)")
-	}
-
-	proto.RegisterAgentIngestServer(grpcSrv, &ingestServer{js: js})
-
-	go func() {
-		if err := grpcSrv.Serve(lis); err != nil {
-			log.Fatalf("serve: %v", err)
+	defer func() {
+		if db != nil {
+			db.Close()
 		}
 	}()
 
-	// 4️⃣  Rules Engine for threat detection
-	rulesEngine := NewRulesEngine(ctx, js)
-	go rulesEngine.StartRulesEngine()
+	// TODO: Connect to ClickHouse for event storage
+	// TODO: Connect to NATS for real-time event streaming
 
-	// 5️⃣  JS → ClickHouse sink (runs until ctx cancelled)
-	go clickhouseSink(ctx, js, ch)
-
-	<-ctx.Done()
-	log.Println("shutdown…")
-	grpcSrv.GracefulStop()
-	nc.Drain()
-}
-
-// ─── helper routines ─────────────────────────────────────────────────────
-
-func createTables(ctx context.Context, ch clickhouse.Conn) error {
-	queries := []string{
-		`CREATE TABLE IF NOT EXISTS events (
-			org_id String,
-			host_id String,
-			ts DateTime64(9),
-			stream String,
-			message String,
-			labels Map(String, String),
-			severity String DEFAULT 'info'
-		) ENGINE = MergeTree()
-		PARTITION BY toYYYYMM(ts)
-		ORDER BY (org_id, host_id, ts)`,
-
-		`CREATE TABLE IF NOT EXISTS agent_heartbeats (
-			org_id String,
-			host_id String,
-			ts DateTime64(9),
-			agent_version String,
-			status String
-		) ENGINE = MergeTree()
-		PARTITION BY toYYYYMM(ts)
-		ORDER BY (org_id, host_id, ts)`,
-
-		`CREATE TABLE IF NOT EXISTS alerts (
-			alert_id String,
-			rule_id String,
-			rule_name String,
-			org_id String,
-			host_id String,
-			ts DateTime64(9),
-			severity String,
-			message String,
-			count UInt32,
-			status String DEFAULT 'active'
-		) ENGINE = MergeTree()
-		PARTITION BY toYYYYMM(ts)
-		ORDER BY (org_id, severity, ts)`,
-
-		`CREATE TABLE IF NOT EXISTS mitigations (
-			request_id String,
-			org_id String,
-			host_id String,
-			ts DateTime64(9),
-			action String,
-			target String,
-			duration_minutes UInt32,
-			success Bool,
-			error_message String,
-			rule_id String
-		) ENGINE = MergeTree()
-		PARTITION BY toYYYYMM(ts)
-		ORDER BY (org_id, host_id, ts)`,
-
-		`CREATE TABLE IF NOT EXISTS system_metrics (
-			org_id String,
-			host_id String,
-			ts DateTime64(9),
-			cpu_usage Float64,
-			memory_usage Float64,
-			disk_usage Float64,
-			network_in UInt64,
-			network_out UInt64
-		) ENGINE = MergeTree()
-		PARTITION BY toYYYYMM(ts)
-		ORDER BY (org_id, host_id, ts)`,
+	// Start gRPC server
+	port := os.Getenv("GRPC_PORT")
+	if port == "" {
+		port = "9002"
 	}
 
-	for _, query := range queries {
-		if err := ch.Exec(ctx, query); err != nil {
-			return fmt.Errorf("create table: %w", err)
+	lis, err := net.Listen("tcp", ":"+port)
+	if err != nil {
+		log.Fatalf("Failed to listen: %v", err)
+	}
+
+	// Create gRPC server with TLS support
+	var s *grpc.Server
+	if os.Getenv("USE_TLS") == "true" {
+		// Load TLS certificates
+		cert, err := tls.LoadX509KeyPair("server.crt", "server.key")
+		if err != nil {
+			log.Fatalf("Failed to load TLS certificates: %v", err)
 		}
+
+		creds := credentials.NewServerTLSFromCert(&cert)
+		s = grpc.NewServer(grpc.Creds(creds))
+	} else {
+		s = grpc.NewServer()
 	}
-	log.Println("ClickHouse tables created/verified")
-	return nil
-}
 
-func clickhouseSink(ctx context.Context, js nats.JetStreamContext, ch clickhouse.Conn) {
-	sub, _ := js.PullSubscribe("logs.>", "ingest-sink", nats.PullMaxWaiting(128))
+	// Register our service
+	proto.RegisterAgentIngestServer(s, &ingestServer{
+		js: nil, // TODO: Initialize NATS JetStream
+		db: db,
+	})
 
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-			msgs, _ := sub.Fetch(256, nats.MaxWait(500*time.Millisecond))
-			if len(msgs) == 0 {
-				continue
-			}
+	// Graceful shutdown
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		log.Printf("🛑 Shutting down gracefully...")
+		s.GracefulStop()
+	}()
 
-			batch, _ := ch.PrepareBatch(ctx, `INSERT INTO events
-				(org_id, host_id, ts, stream, message, labels)`)
-
-			for _, m := range msgs {
-				ev := new(proto.LogEvent)
-				if err := gproto.Unmarshal(m.Data, ev); err != nil { // use aliased helper
-					m.Nak()
-					continue
-				}
-				batch.Append(
-					ev.OrgId, ev.HostId,
-					time.Unix(0, ev.TsUnixNs),
-					ev.Stream, ev.Message, ev.Labels,
-				)
-				m.Ack()
-			}
-			if err := batch.Send(); err != nil {
-				log.Printf("clickhouse batch error: %v", err)
-			}
-		}
+	log.Printf("🎯 gRPC server listening on :%s (TLS: %v)", port, os.Getenv("USE_TLS") == "true")
+	if err := s.Serve(lis); err != nil {
+		log.Fatalf("Failed to serve: %v", err)
 	}
-}
-
-func getEnv(k, d string) string {
-	if v := os.Getenv(k); v != "" {
-		return v
-	}
-	return d
 }
