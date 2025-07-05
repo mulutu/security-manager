@@ -142,7 +142,7 @@ go 1.18
 
 require (
 	github.com/ClickHouse/clickhouse-go/v2 v2.5.1
-	github.com/nats-io/nats.go v1.25.0
+	github.com/nats-io/nats.go v1.20.0
 	google.golang.org/grpc v1.53.0
 	google.golang.org/protobuf v1.28.1
 )
@@ -153,6 +153,9 @@ rm -f go.sum
 
 # Generate go.sum with correct checksums
 log_info "Generating dependency checksums..."
+export GOPROXY=direct
+export GOSUMDB=off
+export GO111MODULE=on
 go mod tidy
 
 # Build the agent
