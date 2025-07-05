@@ -178,7 +178,9 @@ rm -f go.sum
 
 # Download dependencies with locked versions
 log_info "Downloading dependencies with locked versions..."
-go mod download
+timeout 60 go mod download || {
+    log_warn "Download timeout, continuing with build..."
+}
 
 # Build the agent
 log_info "Building agent..."
@@ -189,10 +191,6 @@ export GOPROXY=direct
 export GOSUMDB=off
 export GO111MODULE=on
 export GOFLAGS="-mod=readonly"
-
-# Verify our locked dependencies are being used
-log_info "Verifying dependency versions..."
-go list -m all | grep golang.org/x/sys
 
 go build -o "$INSTALL_DIR/sm-agent" .
 
