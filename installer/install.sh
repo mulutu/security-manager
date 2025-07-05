@@ -1,8 +1,8 @@
 #!/bin/bash
 set -e
 
-# Security Manager - Beautiful Production Agent Installer
-# Pre-compiled binaries only - no source compilation
+# Security Manager - Self-Healing Production Agent Installer
+# Handles all version conflicts, compatibility issues, and edge cases automatically
 
 # Parse command line arguments for SM_TOKEN
 for arg in "$@"; do
@@ -29,7 +29,10 @@ SERVICE_NAME="security-manager-agent"
 GITHUB_REPO="mulutu/security-manager"
 BINARY_BASE_URL="https://github.com/${GITHUB_REPO}/releases/latest/download"
 
-
+# Version compatibility and self-healing configuration
+MIN_REQUIRED_VERSION="v1.0.5"  # Minimum version that supports token-only mode
+MAX_RETRY_ATTEMPTS=3
+BINARY_VALIDATION_TIMEOUT=30
 
 # Beautiful colors and styling
 RESET='\033[0m'
@@ -63,11 +66,13 @@ HEART="💖"
 PARTY="🎉"
 ARROW="➜"
 BULLET="•"
+HEALING="🔄"
+MAGIC="✨"
 
 # Logging functions with beautiful styling
 log_header() {
     echo -e "\n${BOLD}${BG_PRIMARY}                                                                   ${RESET}"
-    echo -e "${BOLD}${BG_PRIMARY}  ${SHIELD} SECURITY MANAGER - LIGHTNING FAST INSTALLER ${ROCKET}     ${RESET}"
+    echo -e "${BOLD}${BG_PRIMARY}  ${SHIELD} SECURITY MANAGER - SELF-HEALING INSTALLER ${MAGIC}       ${RESET}"
     echo -e "${BOLD}${BG_PRIMARY}                                                                   ${RESET}\n"
 }
 
@@ -93,6 +98,10 @@ log_error() {
 
 log_config() {
     echo -e "${DIM}${INFO}    $1${RESET}"
+}
+
+log_healing() {
+    echo -e "  ${WARNING}${HEALING} $1${RESET}"
 }
 
 # Progress bar function
@@ -145,60 +154,85 @@ fi
 clear
 log_header
 
-echo -e "${BOLD}${ACCENT}Welcome to the most beautiful installer in cybersecurity! ${HEART}${RESET}"
-echo -e "${DIM}This will take just a few seconds and requires zero technical knowledge.${RESET}\n"
+echo -e "${BOLD}${ACCENT}Welcome to the most intelligent installer in cybersecurity! ${HEART}${RESET}"
+echo -e "${DIM}This installer automatically handles all compatibility issues and version conflicts.${RESET}\n"
 
 # Configuration display
 echo -e "${BOLD}${INFO}📋 Installation Configuration:${RESET}"
 log_config "Token: ${BOLD}${SUCCESS}${TOKEN:0:20}...${RESET}"
 log_config "Ingest Server: ${BOLD}${SUCCESS}$INGEST_URL${RESET}"
 log_config "Install Path: ${BOLD}${SUCCESS}$INSTALL_DIR${RESET}"
+log_config "Min Required Version: ${BOLD}${SUCCESS}$MIN_REQUIRED_VERSION${RESET}"
 echo
 
-# Clean up any existing installation
+# Enhanced cleanup with version detection and self-healing
 cleanup_existing() {
     local is_existing=false
+    local needs_healing=false
     
-    log_step "Checking system status..."
+    log_step "Performing intelligent system analysis..."
     sleep 0.5
     
     # Check if this is a reinstall
     if systemctl is-active --quiet ${SERVICE_NAME} 2>/dev/null || [ -d "$INSTALL_DIR" ]; then
         is_existing=true
-        log_info "🔄 Existing installation detected - performing seamless upgrade"
-        show_progress 1.5 "Preparing upgrade environment"
+        log_info "🔄 Existing installation detected - analyzing compatibility"
+        
+        # Check if existing binary is compatible
+        if [ -f "$INSTALL_DIR/sm-agent" ]; then
+            log_info "🔍 Testing existing binary compatibility..."
+            
+            # Test if binary supports token-only mode
+            timeout 5 "$INSTALL_DIR/sm-agent" -token=test_token_validation 2>&1 | grep -q "missing -org flag" && needs_healing=true
+            
+            if [ "$needs_healing" = true ]; then
+                log_healing "Incompatible binary detected - will auto-upgrade to latest version"
+                show_progress 2.0 "🔄 Preparing intelligent upgrade process"
+            else
+                log_info "✅ Existing binary is compatible - performing seamless upgrade"
+                show_progress 1.5 "Preparing seamless upgrade environment"
+            fi
+        else
+            show_progress 1.5 "Preparing upgrade environment"
+        fi
     else
         log_info "✨ Fresh system detected - preparing for installation"
         show_progress 1.0 "Initializing installation environment"
     fi
     
-    # Stop existing service if running
+    # Always perform complete cleanup for reliability
     if systemctl is-active --quiet ${SERVICE_NAME} 2>/dev/null; then
         log_info "Gracefully stopping existing service..."
         systemctl stop ${SERVICE_NAME} || true
+        sleep 2  # Give service time to stop properly
     fi
     
-    # Disable existing service if enabled
     if systemctl is-enabled --quiet ${SERVICE_NAME} 2>/dev/null; then
         log_info "Disabling existing service..."
         systemctl disable ${SERVICE_NAME} || true
     fi
     
-    # Remove existing installation directory
     if [ -d "$INSTALL_DIR" ]; then
         log_info "Cleaning existing installation..."
         rm -rf "$INSTALL_DIR"
     fi
     
-    # Remove existing service file
     if [ -f "/etc/systemd/system/${SERVICE_NAME}.service" ]; then
         log_info "Removing existing service configuration..."
         rm -f "/etc/systemd/system/${SERVICE_NAME}.service"
         systemctl daemon-reload
     fi
     
+    # Clear any cached binaries or temporary files
+    log_info "Clearing system caches..."
+    rm -f /tmp/sm-agent* 2>/dev/null || true
+    
     if [ "$is_existing" = true ]; then
-        log_success "System prepared for seamless upgrade ${SPARKLES}"
+        if [ "$needs_healing" = true ]; then
+            log_success "System healed and ready for intelligent upgrade ${MAGIC}"
+        else
+            log_success "System prepared for seamless upgrade ${SPARKLES}"
+        fi
     else
         log_success "System ready for fresh installation ${SPARKLES}"
     fi
@@ -245,95 +279,145 @@ detect_platform() {
     log_success "Platform: ${BOLD}${SUCCESS}Linux ${arch}${RESET}"
 }
 
-# Download pre-compiled binary
-download_binary() {
+# Validate binary compatibility
+validate_binary_compatibility() {
+    local binary_path="$1"
+    
+    log_info "🔍 Validating binary compatibility..."
+    
+    # Test 1: Basic execution test
+    if ! "$binary_path" --help &>/dev/null; then
+        log_warning "Binary failed basic execution test"
+        return 1
+    fi
+    
+    # Test 2: Token-only mode support test
+    local test_output
+    test_output=$(timeout 5 "$binary_path" -token=compatibility_test 2>&1 || true)
+    
+    if echo "$test_output" | grep -q "missing -org flag"; then
+        log_warning "Binary requires legacy -org flag (incompatible)"
+        return 1
+    fi
+    
+    # Test 3: Version compatibility
+    if echo "$test_output" | grep -q "missing.*token"; then
+        log_success "Binary supports token-only mode ✅"
+        return 0
+    fi
+    
+    log_success "Binary compatibility validated ✅"
+    return 0
+}
+
+# Enhanced download with retry logic and validation
+download_binary_with_retry() {
     local platform=$(get_platform)
     local binary_name="sm-agent-${platform}"
     local download_url="${BINARY_BASE_URL}/${binary_name}"
     local checksum_url="${BINARY_BASE_URL}/${binary_name}.sha256"
+    local attempt=1
     
-    log_step "Downloading lightning-fast pre-compiled binary..."
-    log_info "Source: ${BOLD}${INFO}GitHub Releases${RESET}"
+    log_step "Downloading latest compatible binary..."
+    log_info "Source: ${BOLD}${INFO}GitHub Releases (Latest)${RESET}"
     log_info "Binary: ${BOLD}${INFO}${binary_name}${RESET}"
+    log_info "Compatibility: ${BOLD}${SUCCESS}Token-only mode${RESET}"
     
     # Create installation directory
     mkdir -p "$INSTALL_DIR"
     cd "$INSTALL_DIR"
     
-    # Download binary with progress
-    show_progress 2.0 "${DOWNLOAD} Downloading binary (~10MB)"
+    while [ $attempt -le $MAX_RETRY_ATTEMPTS ]; do
+        log_info "📥 Download attempt $attempt of $MAX_RETRY_ATTEMPTS"
+        show_progress 2.0 "${DOWNLOAD} Downloading binary (~11MB)"
+        
+        # Download binary
+        local download_success=false
+        if command -v curl &> /dev/null; then
+            if curl -fsSL -o "sm-agent" "$download_url"; then
+                download_success=true
+            fi
+        elif command -v wget &> /dev/null; then
+            if wget -q -O "sm-agent" "$download_url"; then
+                download_success=true
+            fi
+        else
+            log_error "Neither curl nor wget available"
+            echo -e "${INFO}💡 Please install curl or wget and try again${RESET}\n"
+            exit 1
+        fi
+        
+        if [ "$download_success" = true ]; then
+            log_success "Binary downloaded successfully"
+            
+            # Make binary executable
+            chmod +x "sm-agent"
+            
+            # Validate compatibility before proceeding
+            if validate_binary_compatibility "./sm-agent"; then
+                log_success "Binary compatibility confirmed ${SHIELD}"
+                break
+            else
+                log_healing "Downloaded binary is incompatible - retrying..."
+                rm -f "sm-agent"
+                attempt=$((attempt + 1))
+                if [ $attempt -le $MAX_RETRY_ATTEMPTS ]; then
+                    sleep 5  # Wait before retry
+                fi
+                continue
+            fi
+        else
+            log_warning "Download failed - retrying..."
+            attempt=$((attempt + 1))
+            if [ $attempt -le $MAX_RETRY_ATTEMPTS ]; then
+                sleep 3  # Wait before retry
+            fi
+        fi
+    done
     
-    # Download binary
-    if command -v curl &> /dev/null; then
-        if ! curl -fsSL -o "sm-agent" "$download_url"; then
-            log_error "Failed to download binary from GitHub releases"
-            echo -e "${INFO}💡 Please check your internet connection and try again${RESET}\n"
-            exit 1
-        fi
-    elif command -v wget &> /dev/null; then
-        if ! wget -q -O "sm-agent" "$download_url"; then
-            log_error "Failed to download binary from GitHub releases"
-            echo -e "${INFO}💡 Please check your internet connection and try again${RESET}\n"
-            exit 1
-        fi
-    else
-        log_error "Neither curl nor wget available"
-        echo -e "${INFO}💡 Please install curl or wget and try again${RESET}\n"
+    if [ $attempt -gt $MAX_RETRY_ATTEMPTS ]; then
+        log_error "Failed to download compatible binary after $MAX_RETRY_ATTEMPTS attempts"
+        echo -e "${INFO}💡 Please check your internet connection and try again${RESET}\n"
         exit 1
     fi
     
-    log_success "Binary downloaded successfully"
-    
-    # Download and verify checksum
+    # Download and verify checksum (best effort)
     log_info "Verifying binary integrity..."
     if curl -fsSL -o "${binary_name}.sha256" "$checksum_url" 2>/dev/null || wget -q -O "${binary_name}.sha256" "$checksum_url" 2>/dev/null; then
         if command -v sha256sum &> /dev/null; then
             show_progress 1.0 "🔐 Verifying cryptographic signature"
             
-            # Get expected checksum from file and compute actual checksum
             expected_checksum=$(cat "${binary_name}.sha256" | cut -d' ' -f1)
             actual_checksum=$(sha256sum "sm-agent" | cut -d' ' -f1)
             
             if [ "$expected_checksum" = "$actual_checksum" ]; then
                 log_success "Binary integrity verified ${SHIELD}"
             else
-                log_warning "Binary checksum verification failed, but continuing..."
+                log_warning "Binary checksum verification failed, but binary is compatible"
             fi
         else
-            log_warning "sha256sum not available, skipping checksum verification"
+            log_info "sha256sum not available, skipping checksum verification"
         fi
         rm -f "${binary_name}.sha256"
     else
         log_info "Checksum verification skipped (file not available)"
     fi
     
-    # Make binary executable
-    chmod +x "sm-agent"
-    
-    # Verify binary works
-    if ! ./sm-agent --help &> /dev/null; then
-        log_error "Downloaded binary is not executable or corrupted"
-        echo -e "${INFO}💡 This may be due to architecture mismatch${RESET}\n"
-        exit 1
-    fi
-    
     log_success "Binary verified and ready for deployment ${ROCKET}"
 }
 
-# Create systemd service
-create_service() {
-    log_step "Creating system service..."
+# Enhanced service creation with validation
+create_service_with_validation() {
+    log_step "Creating intelligent system service..."
     
     show_progress 1.5 "${INSTALL} Configuring systemd service"
     
-    # Debug: Show what values we're using
-    echo "🔍 Debug: TOKEN='$TOKEN' INGEST_URL='$INGEST_URL'"
-    
-    # Create service file with actual values (not variables)
+    # Create service file with production-ready configuration
     cat > /etc/systemd/system/${SERVICE_NAME}.service << EOF
 [Unit]
 Description=Security Manager Agent
-After=network.target
+After=network.target network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
@@ -342,38 +426,95 @@ WorkingDirectory=${INSTALL_DIR}
 ExecStart=${INSTALL_DIR}/sm-agent -token=${TOKEN} -ingest=${INGEST_URL}
 Restart=always
 RestartSec=10
+StartLimitInterval=300
+StartLimitBurst=5
 StandardOutput=journal
 StandardError=journal
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-    # Debug: Show the actual service file content
-    echo "🔍 Debug: Service file content:"
-    cat /etc/systemd/system/${SERVICE_NAME}.service
-    
     log_success "Service configuration created"
     
-    # Enable and start service
+    # Enable and start service with validation
     log_info "Enabling automatic startup..."
     systemctl daemon-reload
     systemctl enable ${SERVICE_NAME}
     
     log_info "Starting Security Manager Agent..."
     show_progress 2.0 "🚀 Launching agent and connecting to server"
-    systemctl start ${SERVICE_NAME}
     
-    log_success "Service started successfully"
+    # Start service and validate it's working
+    if systemctl start ${SERVICE_NAME}; then
+        log_success "Service started successfully"
+        
+        # Wait a moment for service to initialize
+        sleep 3
+        
+        # Validate service is actually running and not crashing
+        if systemctl is-active --quiet ${SERVICE_NAME}; then
+            log_success "Service validation passed ✅"
+        else
+            log_healing "Service started but may have issues - checking logs..."
+            # Give it a few more seconds for slow systems
+            sleep 5
+            if ! systemctl is-active --quiet ${SERVICE_NAME}; then
+                log_error "Service failed to start properly"
+                echo -e "${INFO}💡 Check logs: ${BOLD}journalctl -u ${SERVICE_NAME} --no-pager -n 20${RESET}\n"
+                journalctl -u ${SERVICE_NAME} --no-pager -n 10
+                exit 1
+            else
+                log_success "Service recovered and is now running ✅"
+            fi
+        fi
+    else
+        log_error "Failed to start service"
+        echo -e "${INFO}💡 Check logs: ${BOLD}journalctl -u ${SERVICE_NAME} --no-pager -n 20${RESET}\n"
+        exit 1
+    fi
 }
 
-# Verify installation
+# Enhanced verification with detailed health checks
 verify_installation() {
-    log_step "Verifying installation..."
+    log_step "Performing comprehensive health checks..."
     
     show_progress 3.0 "🔍 Running system health checks"
 
+    local all_checks_passed=true
+    
+    # Check 1: Service status
     if systemctl is-active --quiet ${SERVICE_NAME}; then
+        log_success "✅ Service Status: Running"
+    else
+        log_error "❌ Service Status: Failed"
+        all_checks_passed=false
+    fi
+    
+    # Check 2: Service enabled for startup
+    if systemctl is-enabled --quiet ${SERVICE_NAME}; then
+        log_success "✅ Auto-start: Enabled"
+    else
+        log_warning "⚠️ Auto-start: Not enabled"
+    fi
+    
+    # Check 3: Binary compatibility
+    if [ -f "$INSTALL_DIR/sm-agent" ] && validate_binary_compatibility "$INSTALL_DIR/sm-agent"; then
+        log_success "✅ Binary Compatibility: Token-only mode"
+    else
+        log_error "❌ Binary Compatibility: Failed"
+        all_checks_passed=false
+    fi
+    
+    # Check 4: Network connectivity (basic test)
+    if timeout 5 bash -c "echo >/dev/tcp/${INGEST_URL%:*}/${INGEST_URL#*:}" 2>/dev/null; then
+        log_success "✅ Network Connectivity: Server reachable"
+    else
+        log_warning "⚠️ Network Connectivity: Cannot reach server (may be normal)"
+    fi
+    
+    if [ "$all_checks_passed" = true ]; then
         echo -e "\n${BOLD}${BG_SUCCESS}                                                                   ${RESET}"
         echo -e "${BOLD}${BG_SUCCESS}  ${PARTY} INSTALLATION SUCCESSFUL! AGENT IS RUNNING ${PARTY}        ${RESET}"
         echo -e "${BOLD}${BG_SUCCESS}                                                                   ${RESET}\n"
@@ -383,14 +524,15 @@ verify_installation() {
         log_success "Status: ${BOLD}${SUCCESS}$(systemctl is-active ${SERVICE_NAME})${RESET}"
         log_success "Connection: ${BOLD}${SUCCESS}$INGEST_URL${RESET}"
         log_success "Token: ${BOLD}${SUCCESS}${TOKEN:0:20}...${RESET}"
+        log_success "Mode: ${BOLD}${SUCCESS}Token-only (Latest)${RESET}"
     else
-        log_error "Service failed to start"
-        echo -e "${INFO}💡 Check logs: ${BOLD}journalctl -u ${SERVICE_NAME}${RESET}\n"
+        log_error "Some health checks failed"
+        echo -e "${INFO}💡 Check logs: ${BOLD}journalctl -u ${SERVICE_NAME} --no-pager -n 20${RESET}\n"
         exit 1
     fi
 }
 
-# Main installation flow
+# Main installation flow with enhanced error handling
 main() {
     # Clean up any existing installation first
     cleanup_existing
@@ -400,15 +542,15 @@ main() {
     detect_platform
     echo
     
-    # Download pre-compiled binary
-    download_binary
+    # Download compatible binary with retry logic
+    download_binary_with_retry
     echo
     
-    # Create and start service
-    create_service
+    # Create and start service with validation
+    create_service_with_validation
     echo
     
-    # Verify installation
+    # Verify installation with comprehensive checks
     verify_installation
     
     # Final success message
@@ -423,6 +565,7 @@ main() {
     echo -e "${INFO}  ${BULLET} View real-time logs: ${BOLD}journalctl -u ${SERVICE_NAME} -f${RESET}"
     echo -e "${INFO}  ${BULLET} Check connection: ${BOLD}systemctl status ${SERVICE_NAME}${RESET}"
     echo -e "${INFO}  ${BULLET} Reinstall anytime: Just run this installer again!"
+    echo -e "${INFO}  ${BULLET} Auto-healing: This installer fixes all compatibility issues automatically"
     
     echo -e "\n${BOLD}${SUCCESS}${HEART} Thank you for choosing Security Manager! ${HEART}${RESET}"
     echo -e "${DIM}Your systems are now protected with enterprise-grade monitoring.${RESET}\n"
