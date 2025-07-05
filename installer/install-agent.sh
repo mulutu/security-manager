@@ -167,6 +167,10 @@ log_info "Temporarily disabling problematic imports for build..."
 find cmd/ -name "*.go" -exec sed -i 's/.*nats.*//g' {} \;
 find cmd/ -name "*.go" -exec sed -i 's/.*clickhouse.*//g' {} \;
 
+# Generate go.sum with the minimal dependencies
+log_info "Generating checksums for minimal dependencies..."
+go mod tidy
+
 # Skip all dependency downloads and resolution
 log_info "Using minimal dependencies to avoid Go version conflicts..."
 
