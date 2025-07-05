@@ -531,7 +531,7 @@ export default function ServersPage() {
                     Install Security Manager Agent on {selectedServer?.name}
                   </CardTitle>
                   <CardDescription>
-                    Copy and run this command on your server to install the Security Manager agent
+                    One simple command installs and configures the agent automatically
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -548,7 +548,7 @@ export default function ServersPage() {
                     <div className="space-y-4">
                       <div>
                         <Label className="text-sm font-medium text-slate-700 mb-2 block">
-                          To install Security Manager Agent on your server, copy this one line and run it on your server:
+                          One-line installer command - copy and run on your server:
                         </Label>
                         <div className="relative bg-slate-900 text-green-400 p-4 rounded-lg font-mono text-sm">
                           <code className="break-all">{installCommand}</code>
@@ -567,12 +567,12 @@ export default function ServersPage() {
                       <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
                         <h4 className="font-semibold text-blue-900 mb-3 flex items-center gap-2">
                           <AlertCircle className="h-4 w-4" />
-                          Installation Steps:
+                          Quick Installation:
                         </h4>
                         <ol className="text-sm text-blue-800 space-y-2">
                           <li className="flex items-start gap-2">
                             <span className="bg-blue-200 text-blue-900 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold mt-0.5">1</span>
-                            <span>Copy the command above</span>
+                            <span>Copy the one-line command above</span>
                           </li>
                           <li className="flex items-start gap-2">
                             <span className="bg-blue-200 text-blue-900 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold mt-0.5">2</span>
@@ -580,28 +580,29 @@ export default function ServersPage() {
                           </li>
                           <li className="flex items-start gap-2">
                             <span className="bg-blue-200 text-blue-900 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold mt-0.5">3</span>
-                            <span>Paste and run the command (requires root/sudo privileges)</span>
+                            <span>Paste and run the command (requires sudo/root access)</span>
                           </li>
                           <li className="flex items-start gap-2">
                             <span className="bg-blue-200 text-blue-900 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold mt-0.5">4</span>
-                            <span>The agent will download, install, and start automatically</span>
+                            <span>Agent installs automatically and connects to your dashboard</span>
                           </li>
                         </ol>
                         
                         <div className="mt-3 p-3 bg-blue-100 rounded border-l-4 border-blue-400">
                           <p className="text-xs text-blue-700">
-                            <strong>Note:</strong> The command includes your organization credentials and will automatically configure the agent for your account.
+                            <strong>Secure:</strong> The command contains your unique organization token and automatically configures the agent for your account. No manual setup required!
                           </p>
                         </div>
                       </div>
                       
                       <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-                        <h4 className="font-semibold text-green-900 mb-2">✅ What happens next?</h4>
+                        <h4 className="font-semibold text-green-900 mb-2">🚀 What happens after installation?</h4>
                         <ul className="text-sm text-green-800 space-y-1">
-                          <li>• The agent will automatically connect to our monitoring system</li>
-                          <li>• You&apos;ll see the server status change to &quot;Online&quot; in your dashboard</li>
-                          <li>• Security monitoring will begin immediately</li>
-                          <li>• You&apos;ll receive alerts for any security events</li>
+                          <li>• Agent connects automatically to Security Manager</li>
+                          <li>• Server status updates to &quot;Online&quot; in this dashboard</li>
+                          <li>• Real-time security monitoring begins immediately</li>
+                          <li>• You&apos;ll receive instant alerts for security events</li>
+                          <li>• No additional configuration needed</li>
                         </ul>
                       </div>
                     </div>
