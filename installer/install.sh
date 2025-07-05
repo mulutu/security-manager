@@ -328,6 +328,9 @@ create_service() {
     
     show_progress 1.5 "${INSTALL} Configuring systemd service"
     
+    # Debug: Show what values we're using
+    echo "🔍 Debug: ORG_ID='$ORG_ID' TOKEN='$TOKEN' HOST_ID='$HOST_ID' INGEST_URL='$INGEST_URL'"
+    
     cat > /etc/systemd/system/${SERVICE_NAME}.service << EOF
 [Unit]
 Description=Security Manager Agent
@@ -337,7 +340,7 @@ After=network.target
 Type=simple
 User=root
 WorkingDirectory=$INSTALL_DIR
-ExecStart=$INSTALL_DIR/sm-agent -org=$ORG_ID -token=$TOKEN -host=$HOST_ID -ingest=$INGEST_URL
+ExecStart=$INSTALL_DIR/sm-agent -org="$ORG_ID" -token="$TOKEN" -host="$HOST_ID" -ingest="$INGEST_URL"
 Restart=always
 RestartSec=10
 StandardOutput=journal
