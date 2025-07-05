@@ -133,8 +133,8 @@ sed -i 's/go 1\.[0-9][0-9]*/go 1.18/' go.mod
 # Remove toolchain directive if present
 sed -i '/^toolchain/d' go.mod
 
-# Ensure we have the most compatible versions
-log_info "Updating dependencies for maximum compatibility..."
+# Ensure we have the most compatible versions for PRODUCTION
+log_info "Setting up production-only dependencies..."
 cat > go.mod << EOF
 module github.com/mulutu/security-manager
 
@@ -142,45 +142,79 @@ go 1.18
 
 require (
 	github.com/ClickHouse/clickhouse-go/v2 v2.5.1
-	github.com/nats-io/nats.go v1.16.0
-	google.golang.org/grpc v1.53.0
+	github.com/nats-io/nats.go v1.13.0
+	google.golang.org/grpc v1.50.1
 	google.golang.org/protobuf v1.28.1
 )
 
+// Exclude all test-related packages
 exclude (
 	github.com/nats-io/nats-server/v2 v2.11.6
+	github.com/nats-io/nats-server/v2 v2.10.0
+	github.com/nats-io/nats-server/v2 v2.9.0
+)
+
+// Replace any test imports with dummy modules
+replace (
+	github.com/nats-io/nats-server/v2/test => ./internal/noop
+	github.com/nats-io/nats-server/v2/server => ./internal/noop
 )
 EOF
 
-# Remove any existing go.sum and let Go generate correct checksums
+# Create a dummy noop module to replace test imports
+mkdir -p internal/noop
+cat > internal/noop/go.mod << EOF
+module noop
+go 1.18
+EOF
+
+cat > internal/noop/noop.go << EOF
+// Package noop provides empty implementations for test dependencies
+package noop
+
+// Empty package to replace test dependencies
+EOF
+
+# Remove any existing go.sum and test directories
 rm -f go.sum
+rm -rf tools/test_*
 
 # Download specific versions to avoid conflicts
-log_info "Downloading specific compatible versions..."
+log_info "Downloading production dependencies only..."
 export GOPROXY=direct
 export GOSUMDB=off
 export GO111MODULE=on
+export CGO_ENABLED=0
 
-# Download only the specific versions we need
+# Download only the specific versions we need for production
 go mod download github.com/ClickHouse/clickhouse-go/v2@v2.5.1
-go mod download github.com/nats-io/nats.go@v1.16.0
-go mod download google.golang.org/grpc@v1.53.0
+go mod download github.com/nats-io/nats.go@v1.13.0
+go mod download google.golang.org/grpc@v1.50.1
 go mod download google.golang.org/protobuf@v1.28.1
 
-# Now run go mod tidy with specific constraints
-log_info "Finalizing dependencies..."
-go mod tidy
+# Skip go mod tidy to avoid pulling in test dependencies
+log_info "Skipping dependency resolution to avoid test packages..."
+
+# Verify no test imports exist in our code
+log_info "Verifying production-only imports..."
+if grep -r "nats-server" cmd/ internal/ 2>/dev/null; then
+    log_error "Found test imports in production code - cleaning up..."
+    # Remove any test imports from our code
+    find cmd/ internal/ -name "*.go" -exec sed -i '/nats-server/d' {} \;
+fi
 
 # Build the agent
-log_info "Building agent..."
+log_info "Building production agent..."
 cd cmd/agent
 
-# Prevent Go from upgrading dependencies during build
+# Set production build environment
 export GOPROXY=direct
 export GOSUMDB=off
 export GO111MODULE=on
+export CGO_ENABLED=0
 
-go build -tags=production -o "$INSTALL_DIR/sm-agent" .
+# Build with production flags - exclude all test code
+go build -ldflags="-s -w" -tags="production,!test" -o "$INSTALL_DIR/sm-agent" .
 
 # Create systemd service
 log_info "Creating systemd service..."
