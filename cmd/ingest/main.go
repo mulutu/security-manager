@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"regexp"
 	"syscall"
 	"time"
 
@@ -25,9 +26,23 @@ import (
 
 const subjFmt = "logs.%s.%s" // org_id, host_id
 
-// Simple token validation (replace with proper auth service)
-var validTokens = map[string]string{
-	"demo": "sm_tok_demo123", // org_id -> token
+// validateToken validates tokens in the format: sm_orgid_timestamp_hostid
+// Returns the extracted org_id if valid, empty string if invalid
+func validateToken(token string) string {
+	// Handle demo token for backwards compatibility
+	if token == "sm_tok_demo123" {
+		return "demo"
+	}
+
+	// Validate production token format: sm_orgid_timestamp_hostid
+	re := regexp.MustCompile(`^sm_([^_]+)_[0-9]+_.+$`)
+	matches := re.FindStringSubmatch(token)
+
+	if len(matches) >= 2 {
+		return matches[1] // Return the org_id
+	}
+
+	return "" // Invalid token format
 }
 
 // ─── gRPC server implementation ──────────────────────────────────────────
@@ -38,16 +53,26 @@ type ingestServer struct {
 }
 
 func (s *ingestServer) Authenticate(ctx context.Context, req *proto.AuthRequest) (*proto.AuthResponse, error) {
-	// Validate token
-	expectedToken, exists := validTokens[req.OrgId]
-	if !exists || expectedToken != req.Token {
+	// Extract org_id from token
+	extractedOrgID := validateToken(req.Token)
+	if extractedOrgID == "" {
+		log.Printf("Authentication failed: Invalid token format: %s", req.Token)
+		return &proto.AuthResponse{
+			Authenticated: false,
+			ErrorMessage:  "Invalid token format",
+		}, nil
+	}
+
+	// Verify that the provided org_id matches the one in the token
+	if req.OrgId != extractedOrgID {
+		log.Printf("Authentication failed: Org ID mismatch. Provided: %s, Token: %s", req.OrgId, extractedOrgID)
 		return &proto.AuthResponse{
 			Authenticated: false,
 			ErrorMessage:  "Invalid org_id or token",
 		}, nil
 	}
 
-	log.Printf("Agent authenticated: org=%s, version=%s", req.OrgId, req.AgentVersion)
+	log.Printf("✅ Agent authenticated: org=%s, version=%s, token=%s...", req.OrgId, req.AgentVersion, req.Token[:20])
 	return &proto.AuthResponse{
 		Authenticated:            true,
 		HeartbeatIntervalSeconds: 30,
