@@ -24,7 +24,7 @@ var (
 	ingestURL = flag.String("ingest", getEnvOrDefault("SM_INGEST_URL", "178.79.139.38:9002"), "gRPC ingest host:port")
 	filePath  = flag.String("file", getEnvOrDefault("SM_FILE_PATH", ""), "file to tail")
 	useTLS    = flag.Bool("tls", getEnvOrDefault("SM_USE_TLS", "false") == "true", "use TLS for gRPC connection")
-	version   = "1.0.6"
+	version   = "1.0.7"
 )
 
 func main() {
