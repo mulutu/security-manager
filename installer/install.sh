@@ -130,7 +130,11 @@ download_binary() {
         if curl -fsSL -o "${binary_name}.sha256" "$checksum_url" 2>/dev/null; then
             log_info "Verifying binary integrity..."
             if command -v sha256sum &> /dev/null; then
-                if echo "$(cat ${binary_name}.sha256)" | sha256sum -c --quiet; then
+                # Get expected checksum from file and compute actual checksum
+                expected_checksum=$(cat "${binary_name}.sha256" | cut -d' ' -f1)
+                actual_checksum=$(sha256sum "sm-agent" | cut -d' ' -f1)
+                
+                if [ "$expected_checksum" = "$actual_checksum" ]; then
                     log_success "Binary integrity verified"
                 else
                     log_warn "Binary checksum verification failed, but continuing..."
@@ -154,7 +158,11 @@ download_binary() {
         if wget -q -O "${binary_name}.sha256" "$checksum_url" 2>/dev/null; then
             log_info "Verifying binary integrity..."
             if command -v sha256sum &> /dev/null; then
-                if echo "$(cat ${binary_name}.sha256)" | sha256sum -c --quiet; then
+                # Get expected checksum from file and compute actual checksum
+                expected_checksum=$(cat "${binary_name}.sha256" | cut -d' ' -f1)
+                actual_checksum=$(sha256sum "sm-agent" | cut -d' ' -f1)
+                
+                if [ "$expected_checksum" = "$actual_checksum" ]; then
                     log_success "Binary integrity verified"
                 else
                     log_warn "Binary checksum verification failed, but continuing..."
