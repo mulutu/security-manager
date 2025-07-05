@@ -14,6 +14,8 @@ import (
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/mulutu/security-manager/internal/proto"
 	"github.com/nats-io/nats.go"
+
+	// "github.com/nats-io/nats.go" // Temporarily disabled for Go 1.18 compatibility
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"

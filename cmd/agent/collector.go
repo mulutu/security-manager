@@ -66,7 +66,7 @@ func tailFile(ctx context.Context, s pb.AgentIngest_StreamEventsClient, org, hos
 	}
 	defer f.Close()
 
-	f.Seek(0, os.SEEK_END) // jump to end
+	f.Seek(0, 2) // jump to end (io.SeekEnd = 2)
 	r := bufio.NewReader(f)
 
 	log.Printf("📁 Tailing file: %s", path)
