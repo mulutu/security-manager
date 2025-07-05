@@ -5,6 +5,27 @@
 
 set -e
 
+# DEPRECATED: This installer compiles from source (slow)
+# Use the main installer instead: install.sh
+
+echo "⚠️  DEPRECATION NOTICE:"
+echo "    This installer compiles from source and is SLOW (2-3 minutes)"
+echo "    Use the fast pre-compiled binary installer instead:"
+echo ""
+echo "    curl -fsSL https://raw.githubusercontent.com/mulutu/security-manager/main/installer/install.sh | sudo bash"
+echo ""
+echo "    Continuing with source compilation in 10 seconds..."
+echo "    Press Ctrl+C to cancel and use the fast installer"
+echo ""
+
+# Give user time to cancel
+for i in {10..1}; do
+    echo -n "$i... "
+    sleep 1
+done
+echo ""
+echo "Proceeding with source compilation..."
+
 # Configuration
 ORG_ID="${ORG_ID:-demo}"
 TOKEN="${TOKEN:-sm_tok_demo123}"
