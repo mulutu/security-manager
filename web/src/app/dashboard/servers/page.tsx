@@ -3,13 +3,11 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { Copy, Server, Plus, Download, CheckCircle, XCircle, Clock, AlertCircle, Edit, Trash2 } from "lucide-react"
+import { Copy, Server, Plus, Download, CheckCircle, XCircle, Clock, AlertCircle, Trash2, RefreshCw } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { Label } from "@/components/ui/label"
 
 interface Server {
   id: string
@@ -27,27 +25,12 @@ export default function ServersPage() {
   const [servers, setServers] = useState<Server[]>([])
   const [loading, setLoading] = useState(true)
   const [installCommand, setInstallCommand] = useState("")
-  const [selectedServer, setSelectedServer] = useState<Server | null>(null)
+  const [generatingCommand, setGeneratingCommand] = useState(false)
   const [needsOrganization, setNeedsOrganization] = useState(false)
   const [settingUpOrg, setSettingUpOrg] = useState(false)
-  const [editingServer, setEditingServer] = useState<Server | null>(null)
   const [deletingServer, setDeletingServer] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState("servers")
   const { toast } = useToast()
-
-  // Form state
-  const [formData, setFormData] = useState({
-    name: "",
-    ipAddress: "",
-    osType: "linux"
-  })
-
-  // Edit form state
-  const [editFormData, setEditFormData] = useState({
-    name: "",
-    ipAddress: "",
-    osType: "linux"
-  })
 
   useEffect(() => {
     fetchServers()
@@ -101,74 +84,34 @@ export default function ServersPage() {
     }
   }
 
-  const handleAddServer = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
+  const generateNewServerCommand = async () => {
+    setGeneratingCommand(true)
     try {
-      const response = await fetch('/api/servers', {
+      const response = await fetch('/api/servers/generate-install-command', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
       })
-
+      
       if (response.ok) {
-        const newServer = await response.json()
-        setServers([...servers, newServer])
-        setFormData({ name: "", ipAddress: "", osType: "linux" })
-        setActiveTab("servers") // Switch back to servers tab
+        const data = await response.json()
+        setInstallCommand(data.command)
+        setActiveTab("install") // Switch to install tab
         toast({
-          title: "Server added successfully",
-          description: `${newServer.name} has been added to your organization.`,
+          title: "Install command generated",
+          description: "Copy and run the command on your server to add it to monitoring.",
         })
       } else if (response.status === 403) {
-        // User needs organization setup
         setNeedsOrganization(true)
       } else {
-        throw new Error('Failed to add server')
+        throw new Error('Failed to generate install command')
       }
     } catch {
       toast({
-        title: "Error adding server",
+        title: "Error generating command",
         description: "Please try again later.",
         variant: "destructive",
       })
-    }
-  }
-
-  const handleEditServer = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    if (!editingServer) return
-
-    try {
-      const response = await fetch(`/api/servers/${editingServer.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(editFormData),
-      })
-
-      if (response.ok) {
-        const updatedServer = await response.json()
-        setServers(servers.map(s => s.id === editingServer.id ? updatedServer : s))
-        setEditingServer(null)
-        setEditFormData({ name: "", ipAddress: "", osType: "linux" })
-        toast({
-          title: "Server updated successfully",
-          description: `${updatedServer.name} has been updated.`,
-        })
-      } else {
-        throw new Error('Failed to update server')
-      }
-    } catch {
-      toast({
-        title: "Error updating server",
-        description: "Please try again later.",
-        variant: "destructive",
-      })
+    } finally {
+      setGeneratingCommand(false)
     }
   }
 
@@ -197,38 +140,6 @@ export default function ServersPage() {
       })
     } finally {
       setDeletingServer(null)
-    }
-  }
-
-  const startEditServer = (server: Server) => {
-    setEditingServer(server)
-    setEditFormData({
-      name: server.name,
-      ipAddress: server.ipAddress,
-      osType: server.osType
-    })
-  }
-
-  const cancelEdit = () => {
-    setEditingServer(null)
-    setEditFormData({ name: "", ipAddress: "", osType: "linux" })
-  }
-
-  const generateInstallCommand = async (server: Server) => {
-    try {
-      const response = await fetch(`/api/servers/${server.id}/install-script`)
-      if (response.ok) {
-        const data = await response.json()
-        setInstallCommand(data.command)
-        setSelectedServer(server)
-        setActiveTab("install") // Switch to install tab
-      }
-    } catch {
-      toast({
-        title: "Error generating command",
-        description: "Please try again later.",
-        variant: "destructive",
-      })
     }
   }
 
@@ -321,7 +232,6 @@ export default function ServersPage() {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList>
             <TabsTrigger value="servers">Your Servers</TabsTrigger>
-            <TabsTrigger value="add">Add Server</TabsTrigger>
             {installCommand && <TabsTrigger value="install">Install Script</TabsTrigger>}
           </TabsList>
 
@@ -338,10 +248,28 @@ export default function ServersPage() {
                       Servers configured for security monitoring
                     </CardDescription>
                   </div>
-                  <Button onClick={() => setActiveTab("add")} className="flex items-center gap-2">
-                    <Plus className="h-4 w-4" />
-                    Add Server
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button 
+                      variant="outline" 
+                      onClick={fetchServers}
+                      disabled={loading}
+                    >
+                      <RefreshCw className={`h-4 w-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
+                      Refresh
+                    </Button>
+                    <Button 
+                      onClick={generateNewServerCommand} 
+                      disabled={generatingCommand}
+                      className="flex items-center gap-2"
+                    >
+                      {generatingCommand ? (
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                      ) : (
+                        <Plus className="h-4 w-4" />
+                      )}
+                      Add Server
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
@@ -349,175 +277,66 @@ export default function ServersPage() {
                   <div className="text-center py-12">
                     <Server className="h-16 w-16 text-slate-300 mx-auto mb-4" />
                     <h3 className="text-lg font-semibold text-slate-900 mb-2">No servers configured</h3>
-                    <p className="text-slate-600 mb-4">Add your first server to start monitoring</p>
-                    <Button onClick={() => setActiveTab("add")} className="flex items-center gap-2">
-                      <Plus className="h-4 w-4" />
-                      Add Your First Server
+                    <p className="text-slate-600 mb-4">Generate an install script to add your first server</p>
+                    <Button 
+                      onClick={generateNewServerCommand} 
+                      disabled={generatingCommand}
+                      className="flex items-center gap-2"
+                    >
+                      {generatingCommand ? (
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                      ) : (
+                        <Plus className="h-4 w-4" />
+                      )}
+                      Generate Install Script
                     </Button>
                   </div>
                 ) : (
                   <div className="grid gap-4">
                     {servers.map((server) => (
                       <Card key={server.id} className="p-4">
-                        {editingServer?.id === server.id ? (
-                          // Edit form
-                          <form onSubmit={handleEditServer} className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="space-y-2">
-                                <Label htmlFor={`edit-name-${server.id}`}>Server Name</Label>
-                                <Input
-                                  id={`edit-name-${server.id}`}
-                                  value={editFormData.name}
-                                  onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
-                                  required
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <Label htmlFor={`edit-ip-${server.id}`}>IP Address</Label>
-                                <Input
-                                  id={`edit-ip-${server.id}`}
-                                  value={editFormData.ipAddress}
-                                  onChange={(e) => setEditFormData({ ...editFormData, ipAddress: e.target.value })}
-                                  required
-                                />
-                              </div>
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor={`edit-os-${server.id}`}>Operating System</Label>
-                              <Select value={editFormData.osType} onValueChange={(value) => setEditFormData({ ...editFormData, osType: value })}>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select OS type" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="linux">Linux</SelectItem>
-                                  <SelectItem value="windows">Windows</SelectItem>
-                                  <SelectItem value="macos">macOS</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="flex gap-2">
-                              <Button type="submit" size="sm">
-                                Save Changes
-                              </Button>
-                              <Button type="button" variant="outline" size="sm" onClick={cancelEdit}>
-                                Cancel
-                              </Button>
-                            </div>
-                          </form>
-                        ) : (
-                          // Display server info
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-4">
-                              <div className="flex items-center gap-2">
-                                {getStatusIcon(server.status)}
-                                <div>
-                                  <h3 className="font-semibold text-slate-900">{server.name}</h3>
-                                  <p className="text-sm text-slate-600">{server.ipAddress}</p>
-                                </div>
-                              </div>
-                              <Badge className={getStatusColor(server.status)}>
-                                {server.status}
-                              </Badge>
-                              <Badge variant="outline">
-                                {server.osType}
-                              </Badge>
-                            </div>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
                             <div className="flex items-center gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => generateInstallCommand(server)}
-                              >
-                                <Download className="h-4 w-4 mr-1" />
-                                Install Script
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => startEditServer(server)}
-                              >
-                                <Edit className="h-4 w-4 mr-1" />
-                                Edit
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleDeleteServer(server.id)}
-                                disabled={deletingServer === server.id}
-                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                              >
-                                {deletingServer === server.id ? (
-                                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-red-600 border-t-transparent mr-1" />
-                                ) : (
-                                  <Trash2 className="h-4 w-4 mr-1" />
-                                )}
-                                Delete
-                              </Button>
+                              {getStatusIcon(server.status)}
+                              <div>
+                                <h3 className="font-semibold text-slate-900">{server.name}</h3>
+                                <p className="text-sm text-slate-600">{server.ipAddress}</p>
+                              </div>
                             </div>
+                            <Badge className={getStatusColor(server.status)}>
+                              {server.status}
+                            </Badge>
+                            <Badge variant="outline">
+                              {server.osType}
+                            </Badge>
+                            {server.agentVersion && (
+                              <Badge variant="outline">
+                                v{server.agentVersion}
+                              </Badge>
+                            )}
                           </div>
-                        )}
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDeleteServer(server.id)}
+                              disabled={deletingServer === server.id}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            >
+                              {deletingServer === server.id ? (
+                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-red-600 border-t-transparent mr-1" />
+                              ) : (
+                                <Trash2 className="h-4 w-4 mr-1" />
+                              )}
+                              Remove
+                            </Button>
+                          </div>
+                        </div>
                       </Card>
                     ))}
                   </div>
                 )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="add" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Add New Server</CardTitle>
-                <CardDescription>
-                  Configure a new server for security monitoring
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleAddServer} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="name">Server Name</Label>
-                      <Input
-                        id="name"
-                        value={formData.name}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        placeholder="e.g., Production Web Server"
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="ipAddress">IP Address</Label>
-                      <Input
-                        id="ipAddress"
-                        value={formData.ipAddress}
-                        onChange={(e) => setFormData({ ...formData, ipAddress: e.target.value })}
-                        placeholder="e.g., 192.168.1.100"
-                        required
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="osType">Operating System</Label>
-                    <Select value={formData.osType} onValueChange={(value) => setFormData({ ...formData, osType: value })}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select OS type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="linux">Linux</SelectItem>
-                        <SelectItem value="windows">Windows</SelectItem>
-                        <SelectItem value="macos">macOS</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button type="submit" className="flex-1">
-                      Add Server
-                    </Button>
-                    <Button type="button" variant="outline" onClick={() => setActiveTab("servers")}>
-                      Cancel
-                    </Button>
-                  </div>
-                </form>
               </CardContent>
             </Card>
           </TabsContent>
@@ -528,23 +347,14 @@ export default function ServersPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Download className="h-5 w-5" />
-                    Install Security Manager Agent on {selectedServer?.name}
+                    Add New Server to Security Manager
                   </CardTitle>
                   <CardDescription>
-                    One simple command installs and configures the agent automatically
+                    Run this command on any server to automatically add it to your monitoring dashboard
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-6">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline">
-                        {selectedServer?.osType}
-                      </Badge>
-                      <Badge variant="outline">
-                        {selectedServer?.ipAddress}
-                      </Badge>
-                    </div>
-                    
                     <div className="space-y-4">
                       <div>
                         <Label className="text-sm font-medium text-slate-700 mb-2 block">
@@ -567,7 +377,7 @@ export default function ServersPage() {
                       <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
                         <h4 className="font-semibold text-blue-900 mb-3 flex items-center gap-2">
                           <AlertCircle className="h-4 w-4" />
-                          Quick Installation:
+                          Simple Installation Process:
                         </h4>
                         <ol className="text-sm text-blue-800 space-y-2">
                           <li className="flex items-start gap-2">
@@ -576,21 +386,21 @@ export default function ServersPage() {
                           </li>
                           <li className="flex items-start gap-2">
                             <span className="bg-blue-200 text-blue-900 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold mt-0.5">2</span>
-                            <span>SSH into your server: <code className="bg-blue-100 px-1 rounded">ssh root@{selectedServer?.ipAddress}</code></span>
+                            <span>SSH into your server as root or with sudo access</span>
                           </li>
                           <li className="flex items-start gap-2">
                             <span className="bg-blue-200 text-blue-900 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold mt-0.5">3</span>
-                            <span>Paste and run the command (requires sudo/root access)</span>
+                            <span>Paste and run the command</span>
                           </li>
                           <li className="flex items-start gap-2">
                             <span className="bg-blue-200 text-blue-900 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold mt-0.5">4</span>
-                            <span>Agent installs automatically and connects to your dashboard</span>
+                            <span>The server will automatically appear in your dashboard within seconds</span>
                           </li>
                         </ol>
                         
                         <div className="mt-3 p-3 bg-blue-100 rounded border-l-4 border-blue-400">
                           <p className="text-xs text-blue-700">
-                            <strong>Secure:</strong> The command contains your unique organization token and automatically configures the agent for your account. No manual setup required!
+                            <strong>🔒 Secure & Automatic:</strong> The agent will automatically register itself with its hostname and IP address. No manual configuration needed!
                           </p>
                         </div>
                       </div>
@@ -598,12 +408,33 @@ export default function ServersPage() {
                       <div className="bg-green-50 p-4 rounded-lg border border-green-200">
                         <h4 className="font-semibold text-green-900 mb-2">🚀 What happens after installation?</h4>
                         <ul className="text-sm text-green-800 space-y-1">
-                          <li>• Agent connects automatically to Security Manager</li>
-                          <li>• Server status updates to &quot;Online&quot; in this dashboard</li>
+                          <li>• Agent automatically detects server hostname and OS</li>
+                          <li>• Server appears in your dashboard within 30 seconds</li>
                           <li>• Real-time security monitoring begins immediately</li>
-                          <li>• You&apos;ll receive instant alerts for security events</li>
-                          <li>• No additional configuration needed</li>
+                          <li>• No IP addresses stored - enhanced security</li>
+                          <li>• Agent self-registers with your organization</li>
                         </ul>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Button 
+                          onClick={generateNewServerCommand} 
+                          disabled={generatingCommand}
+                          variant="outline"
+                        >
+                          {generatingCommand ? (
+                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-600 border-t-transparent mr-1" />
+                          ) : (
+                            <RefreshCw className="h-4 w-4 mr-1" />
+                          )}
+                          Generate New Command
+                        </Button>
+                        <Button 
+                          onClick={() => setActiveTab("servers")}
+                          variant="outline"
+                        >
+                          Back to Servers
+                        </Button>
                       </div>
                     </div>
                   </div>

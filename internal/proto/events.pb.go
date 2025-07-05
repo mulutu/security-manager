@@ -7,11 +7,11 @@
 package proto
 
 import (
-	reflect "reflect"
-	sync "sync"
-
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	reflect "reflect"
+	sync "sync"
+	unsafe "unsafe"
 )
 
 const (
@@ -105,12 +105,18 @@ func (x *LogEvent) GetLabels() map[string]string {
 	return nil
 }
 
-// Authentication for agent connections
+// Authentication for agent connections with auto-registration
 type AuthRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	OrgId         string                 `protobuf:"bytes,1,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
-	Token         string                 `protobuf:"bytes,2,opt,name=token,proto3" json:"token,omitempty"`
-	AgentVersion  string                 `protobuf:"bytes,3,opt,name=agent_version,json=agentVersion,proto3" json:"agent_version,omitempty"`
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	OrgId        string                 `protobuf:"bytes,1,opt,name=org_id,json=orgId,proto3" json:"org_id,omitempty"`
+	Token        string                 `protobuf:"bytes,2,opt,name=token,proto3" json:"token,omitempty"`
+	AgentVersion string                 `protobuf:"bytes,3,opt,name=agent_version,json=agentVersion,proto3" json:"agent_version,omitempty"`
+	// Auto-registration fields
+	Hostname      string   `protobuf:"bytes,4,opt,name=hostname,proto3" json:"hostname,omitempty"`
+	IpAddress     string   `protobuf:"bytes,5,opt,name=ip_address,json=ipAddress,proto3" json:"ip_address,omitempty"`
+	OsType        string   `protobuf:"bytes,6,opt,name=os_type,json=osType,proto3" json:"os_type,omitempty"`
+	OsVersion     string   `protobuf:"bytes,7,opt,name=os_version,json=osVersion,proto3" json:"os_version,omitempty"`
+	Capabilities  []string `protobuf:"bytes,8,rep,name=capabilities,proto3" json:"capabilities,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -166,13 +172,51 @@ func (x *AuthRequest) GetAgentVersion() string {
 	return ""
 }
 
+func (x *AuthRequest) GetHostname() string {
+	if x != nil {
+		return x.Hostname
+	}
+	return ""
+}
+
+func (x *AuthRequest) GetIpAddress() string {
+	if x != nil {
+		return x.IpAddress
+	}
+	return ""
+}
+
+func (x *AuthRequest) GetOsType() string {
+	if x != nil {
+		return x.OsType
+	}
+	return ""
+}
+
+func (x *AuthRequest) GetOsVersion() string {
+	if x != nil {
+		return x.OsVersion
+	}
+	return ""
+}
+
+func (x *AuthRequest) GetCapabilities() []string {
+	if x != nil {
+		return x.Capabilities
+	}
+	return nil
+}
+
 type AuthResponse struct {
 	state                    protoimpl.MessageState `protogen:"open.v1"`
 	Authenticated            bool                   `protobuf:"varint,1,opt,name=authenticated,proto3" json:"authenticated,omitempty"`
 	ErrorMessage             string                 `protobuf:"bytes,2,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
 	HeartbeatIntervalSeconds int64                  `protobuf:"varint,3,opt,name=heartbeat_interval_seconds,json=heartbeatIntervalSeconds,proto3" json:"heartbeat_interval_seconds,omitempty"`
-	unknownFields            protoimpl.UnknownFields
-	sizeCache                protoimpl.SizeCache
+	// Registration confirmation
+	Registered    bool   `protobuf:"varint,4,opt,name=registered,proto3" json:"registered,omitempty"`
+	AgentId       string `protobuf:"bytes,5,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *AuthResponse) Reset() {
@@ -224,6 +268,20 @@ func (x *AuthResponse) GetHeartbeatIntervalSeconds() int64 {
 		return x.HeartbeatIntervalSeconds
 	}
 	return 0
+}
+
+func (x *AuthResponse) GetRegistered() bool {
+	if x != nil {
+		return x.Registered
+	}
+	return false
+}
+
+func (x *AuthResponse) GetAgentId() string {
+	if x != nil {
+		return x.AgentId
+	}
+	return ""
 }
 
 // Mitigation commands from SaaS to agent
@@ -548,15 +606,26 @@ const file_internal_proto_events_proto_rawDesc = "" +
 	"\x06labels\x18\x06 \x03(\v2\x1b.proto.LogEvent.LabelsEntryR\x06labels\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"_\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xf6\x01\n" +
 	"\vAuthRequest\x12\x15\n" +
 	"\x06org_id\x18\x01 \x01(\tR\x05orgId\x12\x14\n" +
 	"\x05token\x18\x02 \x01(\tR\x05token\x12#\n" +
-	"\ragent_version\x18\x03 \x01(\tR\fagentVersion\"\x97\x01\n" +
+	"\ragent_version\x18\x03 \x01(\tR\fagentVersion\x12\x1a\n" +
+	"\bhostname\x18\x04 \x01(\tR\bhostname\x12\x1d\n" +
+	"\n" +
+	"ip_address\x18\x05 \x01(\tR\tipAddress\x12\x17\n" +
+	"\aos_type\x18\x06 \x01(\tR\x06osType\x12\x1d\n" +
+	"\n" +
+	"os_version\x18\a \x01(\tR\tosVersion\x12\"\n" +
+	"\fcapabilities\x18\b \x03(\tR\fcapabilities\"\xd2\x01\n" +
 	"\fAuthResponse\x12$\n" +
 	"\rauthenticated\x18\x01 \x01(\bR\rauthenticated\x12#\n" +
 	"\rerror_message\x18\x02 \x01(\tR\ferrorMessage\x12<\n" +
-	"\x1aheartbeat_interval_seconds\x18\x03 \x01(\x03R\x18heartbeatIntervalSeconds\"\xdc\x01\n" +
+	"\x1aheartbeat_interval_seconds\x18\x03 \x01(\x03R\x18heartbeatIntervalSeconds\x12\x1e\n" +
+	"\n" +
+	"registered\x18\x04 \x01(\bR\n" +
+	"registered\x12\x19\n" +
+	"\bagent_id\x18\x05 \x01(\tR\aagentId\"\xdc\x01\n" +
 	"\x0fMitigateRequest\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12\x15\n" +
@@ -591,7 +660,7 @@ var (
 
 func file_internal_proto_events_proto_rawDescGZIP() []byte {
 	file_internal_proto_events_proto_rawDescOnce.Do(func() {
-		file_internal_proto_events_proto_rawDescData = protoimpl.X.CompressGZIP([]byte(file_internal_proto_events_proto_rawDesc))
+		file_internal_proto_events_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_internal_proto_events_proto_rawDesc), len(file_internal_proto_events_proto_rawDesc)))
 	})
 	return file_internal_proto_events_proto_rawDescData
 }
@@ -638,7 +707,7 @@ func file_internal_proto_events_proto_init() {
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: []byte(file_internal_proto_events_proto_rawDesc),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internal_proto_events_proto_rawDesc), len(file_internal_proto_events_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   9,
 			NumExtensions: 0,

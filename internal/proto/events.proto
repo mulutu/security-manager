@@ -12,17 +12,26 @@ message LogEvent {
   map<string,string> labels = 6;
 }
 
-// Authentication for agent connections
+// Authentication for agent connections with auto-registration
 message AuthRequest {
   string org_id = 1;
   string token = 2;
   string agent_version = 3;
+  // Auto-registration fields
+  string hostname = 4;
+  string ip_address = 5;
+  string os_type = 6;
+  string os_version = 7;
+  repeated string capabilities = 8;
 }
 
 message AuthResponse {
   bool authenticated = 1;
   string error_message = 2;
   int64 heartbeat_interval_seconds = 3;
+  // Registration confirmation
+  bool registered = 4;
+  string agent_id = 5;
 }
 
 // Mitigation commands from SaaS to agent

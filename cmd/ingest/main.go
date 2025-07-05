@@ -45,6 +45,21 @@ func validateToken(token string) string {
 	return "" // Invalid token format
 }
 
+// autoRegisterAgent creates or updates an agent in the database
+func autoRegisterAgent(req *proto.AuthRequest) (string, error) {
+	// For now, simulate database registration
+	// In production, this would connect to PostgreSQL/Prisma
+	agentID := fmt.Sprintf("agent_%s_%d", req.Hostname, time.Now().Unix())
+
+	log.Printf("🎯 Auto-registering agent: %s (%s) - %s %s",
+		req.Hostname, req.IpAddress, req.OsType, req.OsVersion)
+
+	// TODO: Connect to actual database and create/update agent record
+	// This would call the same database that the web dashboard uses
+
+	return agentID, nil
+}
+
 // ─── gRPC server implementation ──────────────────────────────────────────
 
 type ingestServer struct {
@@ -72,10 +87,27 @@ func (s *ingestServer) Authenticate(ctx context.Context, req *proto.AuthRequest)
 		}, nil
 	}
 
-	log.Printf("✅ Agent authenticated: org=%s, version=%s, token=%s...", req.OrgId, req.AgentVersion, req.Token[:20])
+	// Auto-register the agent if system info is provided
+	var agentID string
+	var registered bool
+	if req.Hostname != "" && req.IpAddress != "" {
+		if id, err := autoRegisterAgent(req); err == nil {
+			agentID = id
+			registered = true
+			log.Printf("✅ Agent auto-registered: %s", agentID)
+		} else {
+			log.Printf("⚠️  Auto-registration failed: %v", err)
+		}
+	}
+
+	log.Printf("✅ Agent authenticated: org=%s, version=%s, hostname=%s, ip=%s",
+		req.OrgId, req.AgentVersion, req.Hostname, req.IpAddress)
+
 	return &proto.AuthResponse{
 		Authenticated:            true,
 		HeartbeatIntervalSeconds: 30,
+		Registered:               registered,
+		AgentId:                  agentID,
 	}, nil
 }
 
