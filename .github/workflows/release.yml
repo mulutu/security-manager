@@ -62,8 +62,8 @@ jobs:
       with:
         name: binaries-${{ matrix.os }}-${{ matrix.arch }}
         path: |
-          sm-agent-*
-          *.sha256
+          sm-agent-${{ matrix.os }}-${{ matrix.arch }}
+          sm-agent-${{ matrix.os }}-${{ matrix.arch }}.sha256
 
   release:
     name: Create Release
@@ -75,6 +75,9 @@ jobs:
       with:
         pattern: binaries-*
         merge-multiple: true
+
+    - name: List downloaded files
+      run: ls -la
 
     - name: Create Release
       uses: softprops/action-gh-release@v2
