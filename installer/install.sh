@@ -340,7 +340,7 @@ After=network.target
 Type=simple
 User=root
 WorkingDirectory=$INSTALL_DIR
-ExecStart=$INSTALL_DIR/sm-agent -org="$ORG_ID" -token="$TOKEN" -host="$HOST_ID" -ingest="$INGEST_URL"
+ExecStart=$INSTALL_DIR/sm-agent -org=$ORG_ID -token=$TOKEN -host=$HOST_ID -ingest=$INGEST_URL
 Restart=always
 RestartSec=10
 StandardOutput=journal
