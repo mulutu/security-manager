@@ -103,7 +103,7 @@ cd security-manager
 
 # Fix go.mod for older Go versions compatibility
 log_info "Fixing go.mod for compatibility..."
-sed -i 's/go 1\.23\.0/go 1.21/' go.mod
+sed -i 's/go 1\.23\.0/go 1.18/' go.mod
 sed -i '/^toolchain/d' go.mod
 
 # Build the agent
