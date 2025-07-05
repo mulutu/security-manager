@@ -111,7 +111,7 @@ function generateInstallCommand(config: {
 # $env:SM_ORG_ID="${orgId}"; $env:SM_TOKEN="${apiKey}"; $env:SM_HOST_ID="${hostId}"; curl -fsSL "${baseUrl}/install.ps1" | powershell`
   } else {
     // For Linux and macOS, download script first then run with environment variables
-    // This approach is more reliable than trying to pass env vars through a pipe
-    return `curl -fsSL ${baseUrl}/install.sh -o /tmp/sm-install.sh && SM_ORG_ID="${orgId}" SM_TOKEN="${apiKey}" SM_HOST_ID="${hostId}" SM_INGEST_URL="178.79.139.38:9002" sudo bash /tmp/sm-install.sh && rm /tmp/sm-install.sh`
+    // This approach ensures environment variables are properly passed to the script
+    return `curl -fsSL ${baseUrl}/install.sh -o /tmp/sm-install.sh && SM_ORG_ID="${orgId}" SM_TOKEN="${apiKey}" SM_HOST_ID="${hostId}" SM_INGEST_URL="178.79.139.38:9002" sudo -E bash /tmp/sm-install.sh && rm /tmp/sm-install.sh`
   }
 } 
