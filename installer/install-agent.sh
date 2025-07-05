@@ -143,6 +143,7 @@ go 1.18
 require (
 	google.golang.org/grpc v1.50.1
 	google.golang.org/protobuf v1.28.1
+	github.com/golang/protobuf v1.5.0
 )
 EOF
 
@@ -171,6 +172,7 @@ find cmd/ -name "*.go" -exec sed -i 's/.*clickhouse.*//g' {} \;
 log_info "Downloading minimal dependencies directly..."
 go mod download google.golang.org/grpc@v1.50.1
 go mod download google.golang.org/protobuf@v1.28.1
+go mod download github.com/golang/protobuf@v1.5.0
 
 # Skip all dependency downloads and resolution
 log_info "Using minimal dependencies to avoid Go version conflicts..."
