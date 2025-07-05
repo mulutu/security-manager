@@ -87,6 +87,25 @@ else
     log_success "Go already installed"
 fi
 
+# Check Go version compatibility
+GO_VERSION=$(go version | grep -oE 'go[0-9]+\.[0-9]+' | sed 's/go//')
+GO_MAJOR=$(echo $GO_VERSION | cut -d. -f1)
+GO_MINOR=$(echo $GO_VERSION | cut -d. -f2)
+
+log_info "Detected Go version: $GO_VERSION"
+
+# Ensure minimum Go 1.18 for compatibility
+if [ "$GO_MAJOR" -lt 1 ] || ([ "$GO_MAJOR" -eq 1 ] && [ "$GO_MINOR" -lt 18 ]); then
+    log_error "Go version $GO_VERSION is too old. Minimum required: 1.18"
+    log_error "Please upgrade Go and re-run this script"
+    exit 1
+fi
+
+# Warn about very new versions that might have compatibility issues
+if [ "$GO_MAJOR" -gt 1 ] || ([ "$GO_MAJOR" -eq 1 ] && [ "$GO_MINOR" -gt 22 ]); then
+    log_warn "Go version $GO_VERSION is very new. Using Go 1.18 compatibility mode."
+fi
+
 # Check Git
 if ! command -v git &> /dev/null; then
     log_warn "Git not found, installing..."
@@ -135,6 +154,8 @@ sed -i '/^toolchain/d' go.mod
 
 # Ensure we have the most compatible versions for PRODUCTION
 log_info "Setting up minimal production dependencies..."
+
+# Use Go 1.18 as baseline for maximum compatibility across all versions
 cat > go.mod << EOF
 module github.com/mulutu/security-manager
 
@@ -145,6 +166,14 @@ require (
 	google.golang.org/protobuf v1.28.1
 	github.com/golang/protobuf v1.5.0
 )
+EOF
+
+# Add comment explaining our compatibility strategy
+cat >> go.mod << EOF
+
+// This module uses Go 1.18 as baseline for maximum compatibility
+// across different Linux distributions and Go versions.
+// Works on Go 1.18+ (forward compatible)
 EOF
 
 # Remove any existing go.sum to let Go generate correct checksums
@@ -183,6 +212,21 @@ cd cmd/agent
 
 # Build with production flags - exclude all test code
 go build -ldflags="-s -w" -tags="production,!test" -o "$INSTALL_DIR/sm-agent" .
+
+# Verify the build was successful
+if [ ! -f "$INSTALL_DIR/sm-agent" ]; then
+    log_error "Build failed - agent binary not created"
+    log_error "Check the build output above for errors"
+    exit 1
+fi
+
+# Verify the binary is executable
+if [ ! -x "$INSTALL_DIR/sm-agent" ]; then
+    log_error "Build failed - agent binary is not executable"
+    exit 1
+fi
+
+log_success "Agent built successfully"
 
 # Create systemd service
 log_info "Creating systemd service..."
