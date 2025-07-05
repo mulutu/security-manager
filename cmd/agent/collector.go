@@ -1,3 +1,5 @@
+//go:build !linux
+
 package main
 
 import (
@@ -53,12 +55,49 @@ func runCollector(
 		go tailFile(ctx, stream, org, host, file)
 	}
 
-	/* Linux security collector */
+	/* Security collector */
 	securityCollector := NewSecurityCollector(ctx, stream, org, host)
 	go securityCollector.StartCollection()
 
 	<-ctx.Done()
 	return ctx.Err()
+}
+
+// SecurityCollector handles security event collection
+type SecurityCollector struct {
+	ctx    context.Context
+	stream pb.AgentIngest_StreamEventsClient
+	org    string
+	host   string
+}
+
+// NewSecurityCollector creates a new security collector
+func NewSecurityCollector(ctx context.Context, stream pb.AgentIngest_StreamEventsClient, org, host string) *SecurityCollector {
+	return &SecurityCollector{
+		ctx:    ctx,
+		stream: stream,
+		org:    org,
+		host:   host,
+	}
+}
+
+// StartCollection begins collecting security events
+func (sc *SecurityCollector) StartCollection() {
+	log.Printf("🔒 Security collector started for host: %s", sc.host)
+
+	// Send a test security event
+	err := sc.stream.Send(&pb.LogEvent{
+		OrgId:    sc.org,
+		HostId:   sc.host,
+		TsUnixNs: time.Now().UnixNano(),
+		Stream:   "security",
+		Message:  "Security monitoring active",
+	})
+	if err != nil {
+		log.Printf("Security event send error: %v", err)
+	}
+
+	<-sc.ctx.Done()
 }
 
 /* tailFile sends each new line as stream="file" */

@@ -1,0 +1,257 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  password      String?   // For credentials authentication
+  emailVerified DateTime?
+  image         String?
+  role          UserRole  @default(USER)
+  organizationId String?
+  organization  Organization? @relation(fields: [organizationId], references: [id])
+  accounts      Account[]
+  sessions      Session[]
+  dashboardWidgets DashboardWidget[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Organization {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  plan        PlanType @default(FREE)
+  maxAgents   Int      @default(5)
+  isActive    Boolean  @default(true)
+  users       User[]
+  agents      Agent[]
+  apiKeys     ApiKey[]
+  securityEvents SecurityEvent[]
+  securityAlerts SecurityAlert[]
+  mitigationActions MitigationAction[]
+  systemMetrics SystemMetric[]
+  dashboardWidgets DashboardWidget[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model ApiKey {
+  id             String       @id @default(cuid())
+  name           String
+  key            String       @unique
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  isActive       Boolean      @default(true)
+  lastUsed       DateTime?
+  expiresAt      DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model Agent {
+  id             String       @id @default(cuid())
+  hostId         String
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String?
+  version        String?
+  status         AgentStatus  @default(OFFLINE)
+  lastSeen       DateTime?
+  ipAddress      String?
+  osInfo         String?
+  capabilities   String[]     // Array of enabled collectors
+  config         Json?        // Agent configuration
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, hostId])
+}
+
+model SecurityEvent {
+  id             String           @id @default(cuid())
+  organizationId String
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  hostId         String?
+  stream         String           // systemd, auth, process, network, metrics, files
+  message        String
+  severity       EventSeverity    @default(INFO)
+  labels         Json?            // Additional metadata
+  timestamp      DateTime         @default(now())
+  source         String?          // Source of the event
+  eventType      String?          // Type of security event
+  ipAddress      String?          // Related IP address
+  processName    String?          // Related process
+  userId         String?          // Related user
+  filePath       String?          // Related file path
+}
+
+model SecurityAlert {
+  id             String        @id @default(cuid())
+  organizationId String
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ruleName       String
+  ruleId         String
+  severity       AlertSeverity @default(MEDIUM)
+  message        String
+  hostId         String?
+  status         AlertStatus   @default(ACTIVE)
+  acknowledgedBy String?
+  acknowledgedAt DateTime?
+  resolvedBy     String?
+  resolvedAt     DateTime?
+  metadata       Json?         // Additional alert data
+  mitigationActions MitigationAction[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+}
+
+model MitigationAction {
+  id             String              @id @default(cuid())
+  organizationId String
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  alertId        String?
+  alert          SecurityAlert?      @relation(fields: [alertId], references: [id])
+  action         MitigationType
+  target         String              // IP, process name, file path, etc.
+  success        Boolean
+  errorMessage   String?
+  metadata       Json?               // Additional action data
+  executedAt     DateTime            @default(now())
+  expiresAt      DateTime?           // For temporary actions
+}
+
+model SystemMetric {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  hostId         String
+  cpuUsage       Float
+  memoryUsage    Float
+  diskUsage      Float
+  networkIn      Float?
+  networkOut     Float?
+  timestamp      DateTime @default(now())
+}
+
+model DashboardWidget {
+  id             String   @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name           String
+  type           WidgetType
+  config         Json     // Widget configuration
+  position       Json     // Widget position and size
+  isVisible      Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+// Enums
+enum UserRole {
+  ADMIN
+  USER
+  VIEWER
+}
+
+enum PlanType {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum AgentStatus {
+  ONLINE
+  OFFLINE
+  ERROR
+  UPDATING
+}
+
+enum EventSeverity {
+  DEBUG
+  INFO
+  WARNING
+  ERROR
+  CRITICAL
+}
+
+enum AlertSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AlertStatus {
+  ACTIVE
+  ACKNOWLEDGED
+  RESOLVED
+  DISMISSED
+}
+
+enum MitigationType {
+  BLOCK_IP
+  KILL_PROCESS
+  ISOLATE_HOST
+  QUARANTINE_FILE
+  DISABLE_SERVICE
+  CUSTOM_RULE
+}
+
+enum WidgetType {
+  SECURITY_EVENTS
+  ALERTS_SUMMARY
+  AGENT_STATUS
+  SYSTEM_METRICS
+  NETWORK_ACTIVITY
+  PROCESS_MONITORING
+  CUSTOM_CHART
+}
