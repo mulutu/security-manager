@@ -142,20 +142,33 @@ go 1.18
 
 require (
 	github.com/ClickHouse/clickhouse-go/v2 v2.5.1
-	github.com/nats-io/nats.go v1.20.0
+	github.com/nats-io/nats.go v1.16.0
 	google.golang.org/grpc v1.53.0
 	google.golang.org/protobuf v1.28.1
+)
+
+exclude (
+	github.com/nats-io/nats-server/v2 v2.11.6
 )
 EOF
 
 # Remove any existing go.sum and let Go generate correct checksums
 rm -f go.sum
 
-# Generate go.sum with correct checksums
-log_info "Generating dependency checksums..."
+# Download specific versions to avoid conflicts
+log_info "Downloading specific compatible versions..."
 export GOPROXY=direct
 export GOSUMDB=off
 export GO111MODULE=on
+
+# Download only the specific versions we need
+go mod download github.com/ClickHouse/clickhouse-go/v2@v2.5.1
+go mod download github.com/nats-io/nats.go@v1.16.0
+go mod download google.golang.org/grpc@v1.53.0
+go mod download google.golang.org/protobuf@v1.28.1
+
+# Now run go mod tidy with specific constraints
+log_info "Finalizing dependencies..."
 go mod tidy
 
 # Build the agent
@@ -167,7 +180,7 @@ export GOPROXY=direct
 export GOSUMDB=off
 export GO111MODULE=on
 
-go build -o "$INSTALL_DIR/sm-agent" .
+go build -tags=production -o "$INSTALL_DIR/sm-agent" .
 
 # Create systemd service
 log_info "Creating systemd service..."
