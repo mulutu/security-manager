@@ -142,7 +142,7 @@ go 1.18
 
 require (
 	github.com/ClickHouse/clickhouse-go/v2 v2.5.1
-	github.com/nats-io/nats.go v1.28.0
+	github.com/nats-io/nats.go v1.25.0
 	google.golang.org/grpc v1.53.0
 	google.golang.org/protobuf v1.28.1
 )
@@ -198,10 +198,8 @@ github.com/google/uuid v1.3.0 h1:t6JiXuUQJ+/3MHpbgTcfnZZJqBDGSJWsGvWJHJqg3YY=
 github.com/google/uuid v1.3.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
 github.com/klauspost/compress v1.16.5 h1:IFV2oUNUzZaz+XyusxpLzpzS8Pt5rh0Z16For/djlyI=
 github.com/klauspost/compress v1.16.5/go.mod h1:ntbaceVETuRiXiv4DpjP66DpAtAGkEQskQzEyD//IeE=
-github.com/nats-io/nats-server/v2 v2.11.6 h1:vZjJ7mCJzFl1cY4HIrG2OZjxrWmhm0m3NWXCxd2r2Oc=
-github.com/nats-io/nats-server/v2 v2.11.6/go.mod h1:+J5CjFjOv5gO3pnKJQzLFTdYYvzXJGF/hgZWYfE5+So=
-github.com/nats-io/nats.go v1.28.0 h1:Th4G6zdsz2d0OqXdfzKLClo6bOfoI/b1kInhRtFIy5c=
-github.com/nats-io/nats.go v1.28.0/go.mod h1:XpbWUlOElGwTYbMR7imivs7jJj9GtK7ypv321Wp6pjc=
+github.com/nats-io/nats.go v1.25.0 h1:t5ioC5QRVX4XHwjrKhNNp8T3dDTnrgJdCKKm1zuCE1s=
+github.com/nats-io/nats.go v1.25.0/go.mod h1:XpbWUlOElGwTYbMR7imivs7jJj9GtK7ypv321Wp6pjc=
 github.com/nats-io/nkeys v0.4.4 h1:xvBJ8d69TznjcQl9t6//Q5xXuVhyYiSos6RPtvQNTwk=
 github.com/nats-io/nkeys v0.4.4/go.mod h1:XUkxdLPTufzlihbamfzQ7mw/VGx6ObUs+0bN5sNvt64=
 github.com/nats-io/nuid v1.0.1 h1:5iA8DT8V7q8WK2EScv2padNa/rTESc1KdnPw4TC2paw=
@@ -261,6 +259,11 @@ cd cmd/agent
 export GOPROXY=direct
 export GOSUMDB=off
 export GO111MODULE=on
+export GOFLAGS="-mod=readonly"
+
+# Verify our locked dependencies are being used
+log_info "Verifying dependency versions..."
+go list -m all | grep golang.org/x/sys
 
 go build -o "$INSTALL_DIR/sm-agent" .
 
