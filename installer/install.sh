@@ -14,18 +14,16 @@ done
 
 # Configuration - Read from environment variables, command line args, or use defaults
 TOKEN=${SM_TOKEN:-"sm_tok_demo123"}
-HOST_ID=${SM_HOST_ID:-$(hostname)}
 INGEST_URL="178.79.139.38:9002"
 
-# Extract organization ID from token (format: sm_orgid_timestamp_random)
-if [[ "$TOKEN" =~ ^sm_([^_]+)_[0-9]+_[a-zA-Z0-9]+$ ]]; then
-    ORG_ID="${BASH_REMATCH[1]}"
-    echo "🔧 Production mode detected - extracted org ID from token: $ORG_ID"
+# Check if we have a production token
+if [[ "$TOKEN" =~ ^sm_[^_]+_[0-9]+_.+$ ]]; then
+    echo "🔧 Production mode detected - using provided token"
 else
-    ORG_ID="demo"
     echo "⚠️  Demo mode - using default demo credentials"
     echo "   To use production mode, provide a valid SM_TOKEN"
 fi
+
 INSTALL_DIR="/opt/security-manager"
 SERVICE_NAME="security-manager-agent"
 GITHUB_REPO="mulutu/security-manager"
@@ -152,7 +150,7 @@ echo -e "${DIM}This will take just a few seconds and requires zero technical kno
 
 # Configuration display
 echo -e "${BOLD}${INFO}📋 Installation Configuration:${RESET}"
-log_config "Organization: ${BOLD}${SUCCESS}$ORG_ID${RESET}"
+log_config "Token: ${BOLD}${SUCCESS}${TOKEN:0:20}...${RESET}"
 log_config "Ingest Server: ${BOLD}${SUCCESS}$INGEST_URL${RESET}"
 log_config "Install Path: ${BOLD}${SUCCESS}$INSTALL_DIR${RESET}"
 echo
@@ -329,8 +327,9 @@ create_service() {
     show_progress 1.5 "${INSTALL} Configuring systemd service"
     
     # Debug: Show what values we're using
-    echo "🔍 Debug: ORG_ID='$ORG_ID' TOKEN='$TOKEN' HOST_ID='$HOST_ID' INGEST_URL='$INGEST_URL'"
+    echo "🔍 Debug: TOKEN='$TOKEN' INGEST_URL='$INGEST_URL'"
     
+    # Create service file with actual values (not variables)
     cat > /etc/systemd/system/${SERVICE_NAME}.service << EOF
 [Unit]
 Description=Security Manager Agent
@@ -339,8 +338,8 @@ After=network.target
 [Service]
 Type=simple
 User=root
-WorkingDirectory=$INSTALL_DIR
-ExecStart=$INSTALL_DIR/sm-agent -org=$ORG_ID -token=$TOKEN -host=$HOST_ID -ingest=$INGEST_URL
+WorkingDirectory=${INSTALL_DIR}
+ExecStart=${INSTALL_DIR}/sm-agent -token=${TOKEN} -ingest=${INGEST_URL}
 Restart=always
 RestartSec=10
 StandardOutput=journal
@@ -350,6 +349,10 @@ StandardError=journal
 WantedBy=multi-user.target
 EOF
 
+    # Debug: Show the actual service file content
+    echo "🔍 Debug: Service file content:"
+    cat /etc/systemd/system/${SERVICE_NAME}.service
+    
     log_success "Service configuration created"
     
     # Enable and start service
@@ -379,7 +382,7 @@ verify_installation() {
         log_success "Service: ${BOLD}${SUCCESS}$SERVICE_NAME${RESET}"
         log_success "Status: ${BOLD}${SUCCESS}$(systemctl is-active ${SERVICE_NAME})${RESET}"
         log_success "Connection: ${BOLD}${SUCCESS}$INGEST_URL${RESET}"
-        log_success "Organization: ${BOLD}${SUCCESS}$ORG_ID${RESET}"
+        log_success "Token: ${BOLD}${SUCCESS}${TOKEN:0:20}...${RESET}"
     else
         log_error "Service failed to start"
         echo -e "${INFO}💡 Check logs: ${BOLD}journalctl -u ${SERVICE_NAME}${RESET}\n"

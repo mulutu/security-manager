@@ -1,0 +1,6 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+Do not apply any changes unless you are > 95% confident that it will work
