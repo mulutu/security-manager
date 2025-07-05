@@ -1,25 +1,25 @@
 #!/bin/bash
 
-# Security Manager - Linux Agent Installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/mulutu/security-manager/main/installer/install-linux.sh | bash
+# Security Manager Linux Agent Installer
+# Supports Ubuntu/Debian, CentOS/RHEL, and Fedora
 
 set -e
 
-# Default configuration
-ORG_ID="${SM_ORG_ID:-demo}"
-TOKEN="${SM_TOKEN:-sm_tok_demo123}"
-INGEST_URL="${SM_INGEST_URL:-178.79.139.38:9002}"
+# Configuration
+ORG_ID="${ORG_ID:-demo}"
+TOKEN="${TOKEN:-sm_tok_demo123}"
+INGEST_URL="${INGEST_URL:-178.79.139.38:9002}"
 INSTALL_DIR="/opt/security-manager"
 SERVICE_NAME="security-manager-agent"
 
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
-BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Helper functions
+# Logging functions
 log_info() {
     echo -e "${BLUE}ℹ️  $1${NC}"
 }
@@ -28,12 +28,12 @@ log_success() {
     echo -e "${GREEN}✅ $1${NC}"
 }
 
-log_error() {
-    echo -e "${RED}❌ $1${NC}"
+log_warn() {
+    echo -e "${YELLOW}⚠️  $1${NC}"
 }
 
-log_warning() {
-    echo -e "${YELLOW}⚠️  $1${NC}"
+log_error() {
+    echo -e "${RED}❌ $1${NC}"
 }
 
 # Check if running as root
@@ -43,46 +43,71 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 log_info "Security Manager - Linux Agent Installer"
-echo "  Organization: $ORG_ID"
-echo "  Ingest URL: $INGEST_URL"
-echo ""
+log_info "  Organization: $ORG_ID"
+log_info "  Ingest URL: $INGEST_URL"
+echo
+
+# Detect OS
+if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    OS=$NAME
+    VERSION=$VERSION_ID
+else
+    log_error "Cannot detect OS version"
+    exit 1
+fi
+
+log_info "Detected OS: $OS $VERSION"
 
 # Check dependencies
 log_info "Checking dependencies..."
 
-# Check if Go is installed
+# Check Go
 if ! command -v go &> /dev/null; then
-    log_info "Installing Go..."
-    if command -v apt-get &> /dev/null; then
-        # Ubuntu/Debian
-        apt-get update -qq
-        apt-get install -y golang-go git
-    elif command -v yum &> /dev/null; then
-        # CentOS/RHEL
-        yum install -y golang git
-    elif command -v dnf &> /dev/null; then
-        # Fedora
-        dnf install -y golang git
-    else
-        log_error "Unsupported package manager. Please install Go and Git manually."
-        exit 1
-    fi
-    log_success "Go installed"
+    log_warn "Go not found, installing..."
+    
+    case $OS in
+        *"Ubuntu"*|*"Debian"*)
+            apt-get update
+            apt-get install -y golang-go
+            ;;
+        *"CentOS"*|*"Red Hat"*|*"Rocky"*|*"AlmaLinux"*)
+            yum install -y golang || dnf install -y golang
+            ;;
+        *"Fedora"*)
+            dnf install -y golang
+            ;;
+        *)
+            log_error "Unsupported OS for automatic Go installation: $OS"
+            log_error "Please install Go manually and re-run this script"
+            exit 1
+            ;;
+    esac
 else
     log_success "Go already installed"
 fi
 
-# Check if Git is installed
+# Check Git
 if ! command -v git &> /dev/null; then
-    log_info "Installing Git..."
-    if command -v apt-get &> /dev/null; then
-        apt-get install -y git
-    elif command -v yum &> /dev/null; then
-        yum install -y git
-    elif command -v dnf &> /dev/null; then
-        dnf install -y git
-    fi
-    log_success "Git installed"
+    log_warn "Git not found, installing..."
+    
+    case $OS in
+        *"Ubuntu"*|*"Debian"*)
+            apt-get update
+            apt-get install -y git
+            ;;
+        *"CentOS"*|*"Red Hat"*|*"Rocky"*|*"AlmaLinux"*)
+            yum install -y git || dnf install -y git
+            ;;
+        *"Fedora"*)
+            dnf install -y git
+            ;;
+        *)
+            log_error "Unsupported OS for automatic Git installation: $OS"
+            log_error "Please install Git manually and re-run this script"
+            exit 1
+            ;;
+    esac
 else
     log_success "Git already installed"
 fi
@@ -92,7 +117,7 @@ log_info "Creating installation directory..."
 mkdir -p "$INSTALL_DIR"
 cd "$INSTALL_DIR"
 
-# Clone and build the agent
+# Download and build agent
 log_info "Downloading and building agent..."
 if [ -d "security-manager" ]; then
     rm -rf security-manager
@@ -101,28 +126,40 @@ fi
 git clone https://github.com/mulutu/security-manager.git
 cd security-manager
 
-# Fix go.mod for older Go versions compatibility
+# Fix go.mod for compatibility with older Go versions
 log_info "Fixing go.mod for compatibility..."
-sed -i 's/go 1\.23\.0/go 1.18/' go.mod
+# Set Go version to 1.18 (widely available)
+sed -i 's/go 1\.[0-9][0-9]*/go 1.18/' go.mod
+# Remove toolchain directive if present
 sed -i '/^toolchain/d' go.mod
 
+# Ensure we have the most compatible versions
+log_info "Updating dependencies for maximum compatibility..."
+cat > go.mod << EOF
+module github.com/mulutu/security-manager
+
+go 1.18
+
+require (
+	github.com/ClickHouse/clickhouse-go/v2 v2.5.1
+	github.com/nats-io/nats.go v1.28.0
+	google.golang.org/grpc v1.53.0
+	google.golang.org/protobuf v1.28.1
+)
+EOF
+
+# Clean and rebuild dependencies
+rm -f go.sum
+go mod tidy
+
 # Build the agent
-export GOOS=linux
-export GOARCH=amd64
-export CGO_ENABLED=0
-
-go mod download
-go build -o sm-agent ./cmd/agent
-
-# Install the agent
-cp sm-agent "$INSTALL_DIR/"
-chmod +x "$INSTALL_DIR/sm-agent"
-
-log_success "Agent built and installed"
+log_info "Building agent..."
+cd cmd/agent
+go build -o "$INSTALL_DIR/sm-agent" .
 
 # Create systemd service
 log_info "Creating systemd service..."
-cat > /etc/systemd/system/$SERVICE_NAME.service << EOF
+cat > /etc/systemd/system/${SERVICE_NAME}.service << EOF
 [Unit]
 Description=Security Manager Agent
 After=network.target
@@ -131,9 +168,13 @@ After=network.target
 Type=simple
 User=root
 WorkingDirectory=$INSTALL_DIR
-ExecStart=$INSTALL_DIR/sm-agent -org $ORG_ID -token $TOKEN -ingest $INGEST_URL
+ExecStart=$INSTALL_DIR/sm-agent
+Environment=ORG_ID=$ORG_ID
+Environment=TOKEN=$TOKEN
+Environment=INGEST_URL=$INGEST_URL
+Environment=TLS_ENABLED=false
 Restart=always
-RestartSec=5
+RestartSec=10
 StandardOutput=journal
 StandardError=journal
 
@@ -141,38 +182,31 @@ StandardError=journal
 WantedBy=multi-user.target
 EOF
 
-# Enable and start the service
+# Enable and start service
+log_info "Enabling and starting service..."
 systemctl daemon-reload
-systemctl enable $SERVICE_NAME
-systemctl start $SERVICE_NAME
+systemctl enable ${SERVICE_NAME}
+systemctl start ${SERVICE_NAME}
 
-# Check service status
+# Verify installation
+log_info "Verifying installation..."
 sleep 3
-if systemctl is-active --quiet $SERVICE_NAME; then
-    log_success "Service is running"
+
+if systemctl is-active --quiet ${SERVICE_NAME}; then
+    log_success "Security Manager Agent installed and running successfully!"
+    log_success "Service: $SERVICE_NAME"
+    log_success "Status: $(systemctl is-active ${SERVICE_NAME})"
 else
-    log_warning "Service may not be running properly"
-    log_info "Check logs with: journalctl -u $SERVICE_NAME -f"
+    log_error "Service failed to start. Check logs with: journalctl -u ${SERVICE_NAME}"
+    exit 1
 fi
 
-# Cleanup
-cd /
-rm -rf "$INSTALL_DIR/security-manager"
-
-log_success "Installation completed successfully!"
-echo ""
-log_info "Service Status:"
-systemctl status $SERVICE_NAME --no-pager -l
-echo ""
-log_info "Management Commands:"
-echo "  Start:   sudo systemctl start $SERVICE_NAME"
-echo "  Stop:    sudo systemctl stop $SERVICE_NAME"
-echo "  Status:  sudo systemctl status $SERVICE_NAME"
-echo "  Logs:    sudo journalctl -u $SERVICE_NAME -f"
-echo "  Disable: sudo systemctl disable $SERVICE_NAME"
-echo ""
-log_info "Web Interfaces:"
-echo "  NATS Monitor: http://$(echo $INGEST_URL | cut -d: -f1):8222"
-echo "  ClickHouse UI: http://$(echo $INGEST_URL | cut -d: -f1):8123"
-echo ""
-log_info "Documentation: https://github.com/mulutu/security-manager/blob/main/DEPLOYMENT_MANUAL.md" 
+echo
+log_info "Management commands:"
+echo "  Start:   systemctl start ${SERVICE_NAME}"
+echo "  Stop:    systemctl stop ${SERVICE_NAME}"  
+echo "  Status:  systemctl status ${SERVICE_NAME}"
+echo "  Logs:    journalctl -u ${SERVICE_NAME} -f"
+echo "  Restart: systemctl restart ${SERVICE_NAME}"
+echo
+log_success "Installation complete!" 
