@@ -53,6 +53,10 @@ func runCollector(
 		go tailFile(ctx, stream, org, host, file)
 	}
 
+	/* Linux security collector */
+	securityCollector := NewSecurityCollector(ctx, stream, org, host)
+	go securityCollector.StartCollection()
+
 	<-ctx.Done()
 	return ctx.Err()
 }

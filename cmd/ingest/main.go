@@ -70,8 +70,78 @@ func (s *ingestServer) StreamEvents(stream proto.AgentIngest_StreamEventsServer)
 }
 
 func (s *ingestServer) ReceiveCommands(stream proto.AgentIngest_ReceiveCommandsServer) error {
-	// TODO: Implement bidirectional command streaming for mitigation
-	return status.Errorf(codes.Unimplemented, "command streaming not yet implemented")
+	// Get client context for organization and host identification
+	ctx := stream.Context()
+
+	// Extract org_id and host_id from context metadata (simplified for now)
+	// In production, this would come from authenticated session
+	orgID := "demo"     // TODO: Extract from authenticated context
+	hostID := "unknown" // TODO: Extract from authenticated context
+
+	log.Printf("🔗 Command stream established for %s/%s", orgID, hostID)
+
+	// Subscribe to commands for this specific agent
+	subject := fmt.Sprintf("commands.%s.%s", orgID, hostID)
+	sub, err := s.js.PullSubscribe(subject, fmt.Sprintf("agent-%s-%s", orgID, hostID))
+	if err != nil {
+		return status.Errorf(codes.Internal, "failed to subscribe to commands: %v", err)
+	}
+	defer sub.Unsubscribe()
+
+	// Handle bidirectional streaming
+	go func() {
+		// Listen for responses from agent
+		for {
+			resp, err := stream.Recv()
+			if err != nil {
+				log.Printf("Command stream recv error: %v", err)
+				return
+			}
+
+			// Log mitigation response
+			status := "SUCCESS"
+			if !resp.Success {
+				status = "FAILED"
+			}
+			log.Printf("📥 Mitigation response %s: %s - %s", resp.RequestId, status, resp.ErrorMessage)
+
+			// Store response in ClickHouse for audit trail
+			// TODO: Implement audit logging
+		}
+	}()
+
+	// Send commands to agent
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		default:
+			// Fetch pending commands
+			msgs, err := sub.Fetch(10, nats.MaxWait(1*time.Second))
+			if err != nil {
+				continue
+			}
+
+			for _, msg := range msgs {
+				// Parse command
+				var cmd proto.MitigateRequest
+				if err := gproto.Unmarshal(msg.Data, &cmd); err != nil {
+					msg.Nak()
+					continue
+				}
+
+				// Send command to agent
+				if err := stream.Send(&cmd); err != nil {
+					log.Printf("Failed to send command to agent: %v", err)
+					msg.Nak()
+					return err
+				}
+
+				log.Printf("📤 Command sent to agent: %s", cmd.RequestId)
+				msg.Ack()
+			}
+		}
+	}
 }
 
 // ─── main ────────────────────────────────────────────────────────────────
@@ -136,7 +206,11 @@ func main() {
 		}
 	}()
 
-	// 4️⃣  JS → ClickHouse sink (runs until ctx cancelled)
+	// 4️⃣  Rules Engine for threat detection
+	rulesEngine := NewRulesEngine(ctx, js)
+	go rulesEngine.StartRulesEngine()
+
+	// 5️⃣  JS → ClickHouse sink (runs until ctx cancelled)
 	go clickhouseSink(ctx, js, ch)
 
 	<-ctx.Done()
@@ -155,7 +229,8 @@ func createTables(ctx context.Context, ch clickhouse.Conn) error {
 			ts DateTime64(9),
 			stream String,
 			message String,
-			labels Map(String, String)
+			labels Map(String, String),
+			severity String DEFAULT 'info'
 		) ENGINE = MergeTree()
 		PARTITION BY toYYYYMM(ts)
 		ORDER BY (org_id, host_id, ts)`,
@@ -166,6 +241,49 @@ func createTables(ctx context.Context, ch clickhouse.Conn) error {
 			ts DateTime64(9),
 			agent_version String,
 			status String
+		) ENGINE = MergeTree()
+		PARTITION BY toYYYYMM(ts)
+		ORDER BY (org_id, host_id, ts)`,
+
+		`CREATE TABLE IF NOT EXISTS alerts (
+			alert_id String,
+			rule_id String,
+			rule_name String,
+			org_id String,
+			host_id String,
+			ts DateTime64(9),
+			severity String,
+			message String,
+			count UInt32,
+			status String DEFAULT 'active'
+		) ENGINE = MergeTree()
+		PARTITION BY toYYYYMM(ts)
+		ORDER BY (org_id, severity, ts)`,
+
+		`CREATE TABLE IF NOT EXISTS mitigations (
+			request_id String,
+			org_id String,
+			host_id String,
+			ts DateTime64(9),
+			action String,
+			target String,
+			duration_minutes UInt32,
+			success Bool,
+			error_message String,
+			rule_id String
+		) ENGINE = MergeTree()
+		PARTITION BY toYYYYMM(ts)
+		ORDER BY (org_id, host_id, ts)`,
+
+		`CREATE TABLE IF NOT EXISTS system_metrics (
+			org_id String,
+			host_id String,
+			ts DateTime64(9),
+			cpu_usage Float64,
+			memory_usage Float64,
+			disk_usage Float64,
+			network_in UInt64,
+			network_out UInt64
 		) ENGINE = MergeTree()
 		PARTITION BY toYYYYMM(ts)
 		ORDER BY (org_id, host_id, ts)`,

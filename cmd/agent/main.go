@@ -87,6 +87,11 @@ func main() {
 	defer cancel()
 
 	log.Printf("⇢ streaming logs as %s/%s ➜ %s (TLS: %v) …", *orgID, *hostID, *ingestURL, *useTLS)
+
+	// Start mitigation listener
+	mitigator := NewMitigator(ctx, client, *orgID, *hostID)
+	go mitigator.StartMitigationListener()
+
 	if err := runCollector(ctx, stream, *orgID, *hostID, *filePath, authResp.HeartbeatIntervalSeconds); err != nil {
 		log.Fatalf("collector error: %v", err)
 	}
