@@ -20,8 +20,8 @@ This guide covers deploying the Security Manager services on a remote VM and con
                 │               │               │
                 ▼               ▼               ▼
     ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
-    │  Windows Agent  │ │  Linux Agent    │ │  Other Agents   │
-    │   (Laptop)      │ │ (178.79.136.143)│ │                 │
+    │  Linux Agent    │ │  Linux Agent    │ │  Linux Agent    │
+    │   (VM-01)       │ │   (VM-02)       │ │   (VM-03)       │
     └─────────────────┘ └─────────────────┘ └─────────────────┘
 ```
 
@@ -69,50 +69,7 @@ deploy_nginx_1        /docker-entrypoint.sh nginx      Up      0.0.0.0:443->443/
                                                                0.0.0.0:80->80/tcp
 ```
 
-## 🪟 Step 2: Setup Windows Agent (Your Laptop)
-
-### Prerequisites
-- Windows 10/11
-- PowerShell (Run as Administrator)
-
-### One-Line Installation
-```powershell
-# Default installation (demo org)
-irm https://raw.githubusercontent.com/mulutu/security-manager/main/installer/install.ps1 | iex
-
-# Custom installation
-irm https://raw.githubusercontent.com/mulutu/security-manager/main/installer/install.ps1 | iex; Install-SM -Token "your_token" -OrgId "your_org"
-```
-
-### Manual Setup (Alternative)
-
-1. **Open PowerShell as Administrator**
-
-2. **Navigate to your project directory:**
-   ```powershell
-   cd C:\path\to\security-manager\deploy
-   ```
-
-3. **Run the Windows setup script:**
-   ```powershell
-   .\windows-agent.ps1 -Build -Test
-   ```
-
-4. **Start the agent:**
-   ```powershell
-   .\windows-agent.ps1
-   ```
-
-### Custom Configuration
-```powershell
-# One-liner with custom parameters
-Install-SM -Token "your_token" -OrgId "your_org" -IngestUrl "178.79.139.38:9002"
-
-# Manual script with custom parameters
-.\windows-agent.ps1 -IngestURL "178.79.139.38:9002" -OrgID "your-org" -Token "your-token" -HostID "laptop-01"
-```
-
-## 🐧 Step 3: Setup Linux Agent (178.79.136.143)
+## 🐧 Step 2: Setup Linux Agents
 
 ### Prerequisites
 - Linux VM with internet access
@@ -121,10 +78,13 @@ Install-SM -Token "your_token" -OrgId "your_org" -IngestUrl "178.79.139.38:9002"
 ### One-Line Installation
 ```bash
 # Default installation (demo org)
-curl -fsSL https://raw.githubusercontent.com/mulutu/security-manager/main/installer/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/mulutu/security-manager/main/installer/install-linux.sh | sudo bash
 
 # Custom installation
-curl -fsSL https://raw.githubusercontent.com/mulutu/security-manager/main/installer/install.sh | sudo bash -s -- --token "your_token" --org "your_org"
+export SM_ORG_ID="your_org"
+export SM_TOKEN="your_token"
+export SM_INGEST_URL="178.79.139.38:9002"
+curl -fsSL https://raw.githubusercontent.com/mulutu/security-manager/main/installer/install-linux.sh | sudo bash
 ```
 
 ### Manual Setup (Alternative)
@@ -156,7 +116,7 @@ export SM_HOST_ID="linux-vm-01"
 ./linux-agent.sh
 ```
 
-## 🔍 Step 4: Monitoring and Verification
+## 🔍 Step 3: Monitoring and Verification
 
 ### Service Health Checks
 ```bash

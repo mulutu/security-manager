@@ -29,7 +29,7 @@ This manual provides complete step-by-step instructions for deploying the Securi
 ## 🎯 **Product Vision & Requirements**
 
 ### **Vision Statement**
-Provide companies a turnkey SaaS that detects, prioritises, and auto‑mitigates security & performance threats on any server (Windows, Linux, macOS) in < 30 seconds with zero‑touch onboarding.
+Provide companies a turnkey SaaS that detects, prioritises, and auto‑mitigates security & performance threats on Linux servers in < 30 seconds with zero‑touch onboarding.
 
 ### **Key Principles**
 - **"BitNinja‑like" automated protection** - Proactive threat mitigation
@@ -88,7 +88,7 @@ Provide companies a turnkey SaaS that detects, prioritises, and auto‑mitigates
 The Security Manager system provides automated security monitoring and threat mitigation for servers. This deployment creates:
 
 - **Central Services** on VM `178.79.139.38` (NATS, ClickHouse, Ingest Service)
-- **Windows Agent** on your laptop (log collection and monitoring)
+- **Linux Agents** on target VMs (log collection and monitoring)
 - **Linux Agent** on VM `178.79.136.143` (log collection and monitoring)
 
 ### **Current Phase: P-0 MVP (July 2025)**
@@ -114,9 +114,9 @@ The Security Manager system provides automated security monitoring and threat mi
 - **Network:** Ports 9002, 8222, 8123, 80, 443 accessible
 - **Access:** SSH access with sudo privileges
 
-### **Windows Machine (Your Laptop)**
-- **OS:** Windows 10/11
-- **Access:** Administrator privileges
+### **Additional Linux VMs (Optional)**
+- **OS:** Ubuntu 20.04+ / CentOS 8+ / Debian 11+
+- **Access:** SSH access with sudo privileges
 - **Network:** Internet access to reach VM
 
 ### **Linux VM (178.79.136.143) - Agent Host**
@@ -150,8 +150,8 @@ The Security Manager system provides automated security monitoring and threat mi
                 │               │               │
                 ▼               ▼               ▼
     ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
-    │  Windows Agent  │ │  Linux Agent    │ │  Future Agents  │
-    │   (Laptop)      │ │ (178.79.136.143)│ │                 │
+    │  Linux Agent    │ │  Linux Agent    │ │  Linux Agent    │
+    │   (VM-01)       │ │   (VM-02)       │ │   (VM-03)       │
     └─────────────────┘ └─────────────────┘ └─────────────────┘
 ```
 
@@ -182,9 +182,9 @@ The Security Manager system provides automated security monitoring and threat mi
 - **Agents:** Log collection and heartbeat transmission
 
 ### **Planned Collectors (Phase 1+)**
-- **Windows:** ETW Event‑Log (System, Security), process list (WMI), TCP flows (ETW), optional eBPF for Win11
 - **Linux:** systemd‑journal, psutil, eBPF net + exec, auditd where enabled
-- **macOS:** unified log tail, process snapshots, PF firewall events (Phase 4)
+- **Container:** Docker/Podman log collection, K8s integration (Phase 3)
+- **Cloud:** AWS CloudTrail, Azure Activity Log integration (Phase 4)
 
 ### **Planned Mitigations (Phase 2+)**
 - **M0 (Phase 2):** Firewall block IP / CIDR
@@ -226,7 +226,6 @@ The script will automatically:
    - Health Check: http://178.79.139.38/health
 
 🔧 Agent connection examples:
-   Windows: ./sm-agent.exe -org demo -token sm_tok_demo123 -ingest 178.79.139.38:9002
    Linux:   ./sm-agent -org demo -token sm_tok_demo123 -ingest 178.79.139.38:9002
 ```
 
@@ -248,54 +247,7 @@ chmod +x deploy-remote.sh
 
 ## 🖥️ **Phase 1: Agent Deployment**
 
-### **Windows Agent (Your Laptop)**
 
-#### **Step 1: Open PowerShell as Administrator**
-- Right-click PowerShell → "Run as Administrator"
-
-#### **Step 2: Install Agent (One-Click)**
-```powershell
-# Option 1: Simple installer (recommended - seamless experience)
-irm https://raw.githubusercontent.com/mulutu/security-manager/main/installer/install-simple.ps1 | iex
-
-# Option 2: Full installer with progress bars and advanced features
-irm https://raw.githubusercontent.com/mulutu/security-manager/main/installer/install.ps1 | iex; Install-SM -Token "your_token" -OrgId "your_org"
-
-# Option 3: Manual installation (fallback)
-git clone https://github.com/mulutu/security-manager.git
-cd security-manager\deploy
-.\windows-agent.ps1
-```
-
-**Expected Experience:**
-- ✅ **Progress bars** showing installation steps
-- ✅ **Automatic dependency installation** (Go, Git)
-- ✅ **Multiple service creation methods** for reliability
-- ✅ **Real-time status updates** and error handling
-- ✅ **Complete verification** and connectivity testing
-- ✅ **User-friendly output** with management commands
-
-#### **Step 3: Verify Windows Service**
-```powershell
-# Check service status
-Get-Service SecurityManagerAgent
-
-# View recent logs
-Get-EventLog -LogName Application -Source SecurityManagerAgent -Newest 10
-```
-
-#### **Manual Windows Installation (Alternative)**
-```powershell
-# Clone repository
-git clone https://github.com/mulutu/security-manager.git
-cd security-manager\deploy
-
-# Build and test
-.\windows-agent.ps1 -Build -Test
-
-# Start agent
-.\windows-agent.ps1
-```
 
 ### **Linux Agent (178.79.136.143)**
 
@@ -307,19 +259,22 @@ ssh user@178.79.136.143
 #### **Step 2: Install Agent (One-Line)**
 ```bash
 # Default installation (demo org)
-curl -fsSL https://raw.githubusercontent.com/mulutu/security-manager/main/installer/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/mulutu/security-manager/main/installer/install-linux.sh | sudo bash
 
 # Production installation with custom parameters
-curl -fsSL https://raw.githubusercontent.com/mulutu/security-manager/main/installer/install.sh | sudo bash -s -- --token "your_token" --org "your_org"
+export SM_ORG_ID="your_org"
+export SM_TOKEN="your_token"
+export SM_INGEST_URL="178.79.139.38:9002"
+curl -fsSL https://raw.githubusercontent.com/mulutu/security-manager/main/installer/install-linux.sh | sudo bash
 ```
 
 #### **Step 3: Verify Linux Service**
 ```bash
 # Check service status
-systemctl status sm-agent
+systemctl status security-manager-agent
 
 # View recent logs
-journalctl -u sm-agent -f
+journalctl -u security-manager-agent -f
 ```
 
 #### **Manual Linux Installation (Alternative)**
@@ -380,11 +335,8 @@ curl http://178.79.139.38:8222/jsz
 
 ### **Step 5: Agent Status Verification**
 ```bash
-# Windows
-Get-Service SecurityManagerAgent | Format-Table -AutoSize
-
 # Linux
-systemctl status sm-agent
+systemctl status security-manager-agent
 ```
 
 ### **Step 6: PRD Compliance Verification**
@@ -409,11 +361,8 @@ ssh user@178.79.139.38 'docker-compose -f ~/security-manager/deploy/docker-compo
 ssh user@178.79.139.38 'docker-compose -f ~/security-manager/deploy/docker-compose.prod.yml logs -f'
 
 # Monitor agent logs
-# Windows
-Get-EventLog -LogName Application -Source SecurityManagerAgent -Newest 10
-
 # Linux
-journalctl -u sm-agent -f
+journalctl -u security-manager-agent -f
 ```
 
 ### **Service Management**
@@ -430,15 +379,10 @@ ssh user@178.79.139.38 'cd ~/security-manager/deploy && docker-compose -f docker
 
 ### **Agent Management**
 ```bash
-# Windows
-Start-Service SecurityManagerAgent
-Stop-Service SecurityManagerAgent
-Restart-Service SecurityManagerAgent
-
 # Linux
-sudo systemctl start sm-agent
-sudo systemctl stop sm-agent
-sudo systemctl restart sm-agent
+sudo systemctl start security-manager-agent
+sudo systemctl stop security-manager-agent
+sudo systemctl restart security-manager-agent
 ```
 
 ### **Performance Monitoring**
@@ -521,25 +465,7 @@ ssh user@178.79.139.38 'curl -fsSL https://raw.githubusercontent.com/mulutu/secu
 ```
 
 #### **4. Agent Installation Fails**
-**Windows:**
-```powershell
-# Check if running as Administrator
-[Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()
 
-# If not admin, use one of these alternatives:
-# Option 1: Restart PowerShell as Administrator
-# Option 2: Use simple installer
-irm https://raw.githubusercontent.com/mulutu/security-manager/main/installer/install-simple.ps1 | iex
-
-# Option 3: Manual installation
-git clone https://github.com/mulutu/security-manager.git
-cd security-manager\deploy
-.\windows-agent.ps1
-
-# Install dependencies manually if needed
-# Download and install Go: https://golang.org/dl/
-# Download and install Git: https://git-scm.com/download/win
-```
 
 **Linux:**
 ```bash
@@ -657,7 +583,7 @@ sudo ufw enable
 cmd/agent/
   main.go                 # ✅ service wrapper, flag parse
   collector.go            # ✅ heartbeat + common tailer
-  collector_windows.go    # 🔄 ETW (Phase‑1)
+  collector_container.go  # 🔄 Docker/K8s (Phase‑3)
   collector_linux.go      # 🔄 journalctl + eBPF (Phase‑1)
   mitigator/
     firewall.go           # 🔄 Phase 2
@@ -722,10 +648,7 @@ HEALTH_CHECK_INTERVAL=10s
 ~/security-manager/deploy/             # Deployment scripts
 ~/security-manager/deploy/logs/        # Service logs
 
-# Windows Agent
-C:\Program Files\Security Manager\     # Installation directory
-C:\Program Files\Security Manager\sm-agent.exe  # Agent executable
-C:\Program Files\Security Manager\sm-agent.conf # Configuration
+
 
 # Linux Agent
 /opt/security-manager/                 # Installation directory
@@ -750,11 +673,8 @@ C:\Program Files\Security Manager\sm-agent.conf # Configuration
 # Quick deployment (PRD A-1: Single command install)
 curl -fsSL https://raw.githubusercontent.com/mulutu/security-manager/main/deploy/deploy-remote.sh | bash
 
-# Quick Windows install (PRD A-1: MSI install)
-irm https://raw.githubusercontent.com/mulutu/security-manager/main/installer/install.ps1 | iex
-
 # Quick Linux install (PRD A-1: Single command install)
-curl -fsSL https://raw.githubusercontent.com/mulutu/security-manager/main/installer/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/mulutu/security-manager/main/installer/install-linux.sh | sudo bash
 
 # Health check (PRD S-1: Service availability)
 curl http://178.79.139.38/health
