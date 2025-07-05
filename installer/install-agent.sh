@@ -153,6 +153,15 @@ rm -f go.sum
 log_info "Cleaning Go module cache..."
 go clean -modcache
 
+# Set environment for fresh downloads BEFORE any Go operations
+export GOPROXY=direct
+export GOSUMDB=off
+export GO111MODULE=on
+export CGO_ENABLED=0
+
+# Remove any go.sum files that might exist anywhere
+find . -name "go.sum" -delete
+
 # Temporarily comment out NATS and ClickHouse imports in the agent code
 log_info "Temporarily disabling problematic imports for build..."
 find cmd/ -name "*.go" -exec sed -i 's/.*nats.*//g' {} \;
@@ -161,21 +170,9 @@ find cmd/ -name "*.go" -exec sed -i 's/.*clickhouse.*//g' {} \;
 # Skip all dependency downloads and resolution
 log_info "Using minimal dependencies to avoid Go version conflicts..."
 
-# Set environment for fresh downloads
-export GOPROXY=direct
-export GOSUMDB=off
-export GO111MODULE=on
-export CGO_ENABLED=0
-
 # Build the agent
 log_info "Building minimal production agent..."
 cd cmd/agent
-
-# Set production build environment
-export GOPROXY=direct
-export GOSUMDB=off
-export GO111MODULE=on
-export CGO_ENABLED=0
 
 # Build with production flags - exclude all test code
 go build -ldflags="-s -w" -tags="production,!test" -o "$INSTALL_DIR/sm-agent" .
