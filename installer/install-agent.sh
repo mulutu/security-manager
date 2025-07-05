@@ -197,25 +197,9 @@ log_info "Temporarily disabling problematic imports for build..."
 find cmd/ -name "*.go" -exec sed -i 's/.*nats.*//g' {} \;
 find cmd/ -name "*.go" -exec sed -i 's/.*clickhouse.*//g' {} \;
 
-# Download specific dependencies without checksums
-log_info "Downloading minimal dependencies directly..."
-go mod download google.golang.org/grpc@v1.50.1
-go mod download google.golang.org/protobuf@v1.28.1
-go mod download github.com/golang/protobuf@v1.5.0
-
-# Also download common transitive dependencies that might be needed
-log_info "Downloading common transitive dependencies..."
-go mod download golang.org/x/net@v0.0.0-20220909164309-bea034e7d591
-go mod download golang.org/x/sys@v0.0.0-20220909162455-aba9fc2a8ff2
-go mod download golang.org/x/text@v0.3.7
-
-# Generate go.sum for any remaining dependencies
-log_info "Resolving any remaining dependencies..."
+# Generate dependencies and checksums
+log_info "Resolving dependencies..."
 GOPROXY=direct GOSUMDB=off GO111MODULE=on go mod tidy
-
-# Verify dependencies are available
-log_info "Verifying dependencies..."
-go list -m all
 
 # Skip all dependency downloads and resolution
 log_info "Using minimal dependencies to avoid Go version conflicts..."
