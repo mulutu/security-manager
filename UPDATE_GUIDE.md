@@ -4,6 +4,11 @@
 
 Your Security Manager has been successfully updated with complete auto-registration functionality. All changes have been pushed to GitHub and the release process has been initiated.
 
+### 🔧 **Build Fix Applied**
+- **Fixed gRPC Compatibility**: Updated protobuf files to use SupportPackageIsVersion6
+- **GitHub Actions**: New build triggered with v1.0.7 tag (fixed version)
+- **Local Testing**: Both agent and ingest server build successfully
+
 ## 📋 What's New in v1.0.7
 
 ### ✨ **Major Features**
