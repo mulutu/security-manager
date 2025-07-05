@@ -211,7 +211,11 @@ go mod download golang.org/x/text@v0.3.7
 
 # Generate go.sum for any remaining dependencies
 log_info "Resolving any remaining dependencies..."
-go mod tidy
+GOPROXY=direct GOSUMDB=off GO111MODULE=on go mod tidy
+
+# Verify dependencies are available
+log_info "Verifying dependencies..."
+go list -m all
 
 # Skip all dependency downloads and resolution
 log_info "Using minimal dependencies to avoid Go version conflicts..."
