@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Security Manager Linux Agent Installer
+# Security Manager Linux Agent Installer - Updated with go mod tidy fix
 # Supports Ubuntu/Debian, CentOS/RHEL, and Fedora
 
 set -e
@@ -151,7 +151,7 @@ EOF
 # Remove any existing go.sum and let Go generate correct checksums
 rm -f go.sum
 
-# Generate go.sum with correct checksums
+# Generate go.sum with correct checksums  
 log_info "Generating dependency checksums..."
 go mod tidy
 
